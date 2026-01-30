@@ -6,19 +6,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
 
 app = Flask(__name__)
-app.secret_key = "dlB93f60saldD0"
 
-database_url = os.environ.get('DATABASE_URL')
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///site.db'
-
-
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///finance.db"
 db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+app.secret_key = "dlB93f60saldD0"
 
 # --- 辅助函数：计算“逻辑日期” ---
 def get_logical_date(dt_obj):
