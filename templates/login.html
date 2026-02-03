@@ -3,12 +3,14 @@
     <head>
         <title>Login</title>
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='shake.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='login_body.css')}}">
     </head>
     <body>
         
-        <div class="container" style="max-width: 400px; margin-top: 100px;">
+        <div class="container glass-container" style="max-width: 400px; margin-top: 100px;">
             
-            <h1 style="text-align: center;">Welcome Back</h1>
+            <h1 style="text-align: center; color: white">Welcome Back</h1>
 
             <form action="/login" method="POST">
                 <label>Username:</label>
@@ -18,8 +20,14 @@
                 <input type="password" name="password" required>
 
                 <button type="submit">Login</button>
-            </form>
 
+                {% if wrong_password %}
+                    <p style="text-align: center; font-size: 15px" class="shake-error"> Incorrect password, please try again.</p>
+                {% elif user_dne%}
+                    <p style="text-align: center; font-size: 15px" class="shake-error"> Username does not exist, please try again.</p>
+                {% endif %}
+            </form>
+            <hr>
             <p style="text-align: center; margin-top: 20px;">
                 New here? <a href="/register">Register an account!</a>
             </p>

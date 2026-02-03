@@ -2,9 +2,9 @@
 
 {% block content %}
 <div style="text-align: center; margin-top: 30px">
-    <h2>Login Failed... </h2>
+    <h2>Username Does Not Exist </h2>
     
-    <p>You will be redirected to the login page after 
+    <p>You will be redirected to the register page after 
         <span id="countdown"> 3 </span> seconds.
     </p>
 
@@ -20,7 +20,7 @@
 
         if (seconds <= 0) {
             clearInterval(timer);
-            window.location.href = "{{ url_for('login')}}"
+            window.location.href = "{{ url_for('register')}}"
         }
     }, 1000);
 </script>

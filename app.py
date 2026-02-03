@@ -161,7 +161,7 @@ def history():
         
     return render_template('history.html', grouped_history=grouped_history)
 
-# 删除功能保持不变
+# delete log
 @app.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete(id):
@@ -178,7 +178,7 @@ def delete(id):
     except:
         return "Error deleting item"
 
-# 注册、登录、注销、cana-sp-access 路由请保持你原来的代码，不用动
+# cana-sp-access
 # ... (Register, Login, Logout, SP-Access routes) ...
 @app.route('/register', methods=['POST', 'GET'])
 def register():
@@ -204,10 +204,18 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
+
+        # username exists and password matches:
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect('/')
-        return render_template('login_failed.html')
+
+        # username exists but password is incorrect:
+        if user:
+            return render_template('login.html', wrong_password=True)
+
+        # username does not exist
+        return render_template('login.html', user_dne=True)
     else:
         return render_template('login.html')
 
