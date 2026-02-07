@@ -29,7 +29,7 @@ To run this project locally, ensure you have Python installed, then follow these
 
 1.  **Clone the Repository**
     ```bash
-    git clone [https://github.com/j494zhu/Obsidian-Time-Logger.git](https://github.com/j494zhu/Obsidian-Time-Logger.git)
+    git clone https://github.com/j494zhu/Obsidian-Time-Logger.git
     cd obsidian-time-logger
     ```
 
