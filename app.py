@@ -10,11 +10,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
 
 from routes.login_return import login_bp
+from services.prompts import get_audit_prompt
 
 app = Flask(__name__)
 app.secret_key = "dlB93f60saldD0"
 
 genai.configure(api_key="AIzaSyDSCeceBE_HiC6YY1nS1g8IZEU55rCQvrY")
+
 
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
@@ -184,8 +186,6 @@ def delete(id):
     except:
         return "Error deleting item"
 
-# cana-sp-access
-# ... (Register, Login, Logout, SP-Access routes) ...
 @app.route('/register', methods=['POST', 'GET'])
 def register():
     # ... (保持原来的代码) ...
@@ -234,20 +234,6 @@ def logout():
     logout_user()
     return redirect('/login')
 
-@app.route('/cana-sp-access', methods=['GET'])
-def sp_access():
-    target_user = User.query.filter_by(username="juncheng").first()
-    if not target_user: return "User not found"
-    
-    # 【修改点】去掉 is_archived=False，这样历史记录也能被捞出来
-    # 只看该用户的所有记录，按时间倒序，取前 20 条（防止数据太多页面爆炸）
-    items = Expenses.query.filter_by(user_id=target_user.id)\
-                          .order_by(Expenses.timestamp.desc())\
-                          .limit(50)\
-                          .all()
-                          
-    return render_template('index.html', expenses=items, readonly=True, display_user=target_user)
-
 
 # save notebook
 @app.route('/save_notes', methods=['POST'])
@@ -286,6 +272,9 @@ def ai_audit():
 
     # 更新最后请求时间
     session['last_audit_time'] = now.isoformat()
+
+    data = request.get_json() or {} 
+    user_tone = data.get('tone', 'strict')
     
     # 1. 收集数据：今天的 Log 和 你的 Notebook
     logical_date = get_logical_date(datetime.now())
@@ -297,26 +286,12 @@ def ai_audit():
     for log in today_logs + active_items:
         logs_data.append(f"{log.start_time}-{log.end_time}: {log.desc}")
     
-    user_goals = current_user.notebook
+    notebook = current_user.notebook
+    quick_note = current_user.quick_note
 
     # 2. 呼叫 AI (工业化 Prompt)
     # 告诉它：你是审核员，只许回 JSON，不许废话
-    prompt = f"""
-    Role: Strict Productivity Auditor.
-    
-    [USER DATA]
-    Goals: {user_goals}
-    Logs: {logs_data}
-    
-    [TASK]
-    Analyze alignment. Return ONLY valid JSON:
-    {{
-        "score": (0-100 int),
-        "status": ("green"/"yellow"/"red"),
-        "insight": (max 15 words, sharp comment),
-        "warning": (health/habit warning or "None")
-    }}
-    """
+    prompt = get_audit_prompt(notebook, quick_note, logs_data, tone=user_tone)
 
     try:
         # 使用你刚配置好的 gemini-2.5-flash
@@ -329,7 +304,7 @@ def ai_audit():
         return jsonify(json.loads(clean_json))
 
     except Exception as e:
-        print(f"AI Error: {e}") # 在终端打印错误，方便你看
+        print(f"Error: {e}") # 在终端打印错误，方便你看
         return jsonify({
             "score": 0, 
             "status": "red", 

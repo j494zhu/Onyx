@@ -111,3 +111,69 @@
     gap: 5px;
     font-weight: bold;
 }
+
+/* --- TONE SELECTOR STYLES (Minimalist Glow) --- */
+.hud-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* 加个顶部分割线，更整齐 */
+}
+
+.control-label {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4); /*稍微暗一点 */
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.tone-selector {
+    display: flex;
+    align-items: center;
+    /* 移除之前的背景和边框 */
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* 隐藏原生单选框 */
+.tone-selector input[type="radio"] {
+    display: none;
+}
+
+/* 标签默认样式 (未选中：暗淡) */
+.tone-selector label {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.3); /* 默认很暗 */
+    transition: all 0.3s ease;
+    font-weight: 500;
+    letter-spacing: 1px;
+    position: relative;
+}
+
+/* 添加分割线 (竖线 | ) */
+/* 逻辑：除了最后一个标签外，其他标签后面都加一个竖线 */
+.tone-selector label:not(:last-of-type)::after {
+    content: '|';
+    position: absolute;
+    right: -2px;
+    color: rgba(255, 255, 255, 0.1); /* 分割线非常暗 */
+    font-weight: 100;
+}
+
+/* 鼠标悬停样式 */
+.tone-selector label:hover {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- 选中状态：白色高光发亮 --- */
+.tone-selector input:checked + label {
+    color: rgba(255, 255, 255, 0.9); /* 文字纯白 */
+    font-weight: bold;
+    /* 核心：多重白色文字阴影制造发光效果 */
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 15px rgba(255, 255, 255, 0.4);
+}
