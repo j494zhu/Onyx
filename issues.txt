@@ -25,7 +25,7 @@
 
 11. [resolved] 链接到一个线上服务器, 像现在这样已更新网站, 所有数据就全没了
 
-12. [unresolved] 添加按钮，可以直接记录当前开始时间以及结束时间来添加任务
+12. [resolved] 添加按钮，可以直接记录当前开始时间以及结束时间来添加任务
 
 13. [unresolved] 添加暗色模式
 
@@ -43,7 +43,7 @@
 
 ==========================================================================
 
-20. [unresolved] 降低输入成本（比如集成为一个 开始/结束 按钮，会自动录入时间）
+20. [resolved] 降低输入成本（比如集成为一个 开始/结束 按钮，会自动录入时间）
 21. [unresolved] 允许语音输入（调用api）
 22. [unresolved] 支持移动端适配
 23. [unresolved] 实时跨设备同步数据版本（例如只允许登陆一台设备，或者以某一个版本为准）
@@ -59,13 +59,18 @@
 30. [unresolved] 建立一个tell us about yourself的页面，可以在初次登陆的时候使用；后续支持随时修改
 31. [unresolved] 修改一下notebook与to-do list的逻辑；ai audit会检查to-do list里面的内容来进行评分
     notebook就是单纯的随手记，但是需要解决同步问题（27, 23）
-32. [unresolved] 显示tokens的使用；如果这个项目要脱离展示项目的话，可以考虑连接上一些其他免费的ai模型(阿里云，deepseek等)
+32. [unresolved] 检查tokens的使用；如果这个项目要脱离展示项目的话，可以考虑连接上一些其他免费的ai模型(阿里云，deepseek等)
 33. [unresolved] 在history里，自动计算每一个任务的时常以及每日总时间
 34. [unresolved] 添加横向时间条：
     |study|break|coding|reading|
   10:00                     14:00
 35. [unresolved] neural audit 自动生成报告：自动总结每日时间分布，deepwork比例，分析次数
 36. [unresolved] 给neural audit添加上“选择分析模式”来让项目变得更加高级（从上面角度进行分析？切换不同的分析思路）
+37. [unresolved] 修复neural audit生成报告以后页面的不正常拉伸
+38. [unresolved] 可以让番茄时钟切换到倒计时
+39. [unresolved] 添加上谷歌登录
+40. [unresolved] 将pomodoro的逻辑添加到后端，这样倒计时不会随着刷新页面而被重置
+41. [unresolved] 根据user profile或者其他什么用户设定，自动初始化每天的To-Do List
 
 []. [好的，我现在清楚了
 logged应该是比较好弄的；deepwork按照关键词的筛法，勉强行得通，但并不是一个非常靠谱的方案。

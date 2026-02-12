@@ -8,10 +8,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='index_body.css')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='hud_style.css')}}">
 
-    <script src="{{ url_for('static', filename='scripts/rain.js') }}"></script>
-    
+    <script src="{{ url_for('static', filename='scripts/rain.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/notebook.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/hud_logic.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/pomodoro.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/record_time.js') }}" defer></script>
 </head>
 <body>
     <div>
@@ -32,24 +33,34 @@
                 <div class="glass-container mild-white" style="padding: 10px; margin-bottom: 25px">
                     <h1 class="section-title">Update Timeline</h1>
                     <div class="form-container" >
-                        <form action='/' method='POST'>
+                        <form action='/' method='POST' id="log-form">
                             <label style="font-weight: normal; display: block; margin-bottom: 5px;">Description:</label>
-                            <input type="text" name="desc" placeholder="What did you do?" required style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; background-color: rgba(255, 255, 255, 0); border-color: rgba(255, 255, 255, 0.5)">
+                            <input type="text" name="desc" id="desc_input" placeholder="What are you working on?" required 
+                                style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; background-color: rgba(255, 255, 255, 0); border-color: rgba(255, 255, 255, 0.5); color: white;">
                             
-                            <label style="font-weight: normal; display: block; margin-bottom: 5px; margin-top: 20px">Duration:</label>
-                            <div class="time-inputs-wrapper transp-container">
-                                <div class="time-field">
-                                    <label for="start_time" style="color: whitesmoke; font-weight: 200">From</label>
-                                    <input type="time" id="start_time" name="start_time" required>
-                                </div>
-                                
-                                <span class="time-separator">→</span>
-                                <div class="time-field">
-                                    <label for="end_time" style="color: whitesmoke; font-weight: 200">To</label>
-                                    <input type="time" id="end_time" name="end_time" required>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <div id="digital-clock" style="font-family: monospace; font-size: 3rem; font-weight: 600; color: rgba(255,255,255,0.85); letter-spacing: 2px;">
+                                    00:00
                                 </div>
                             </div>
-                            <button class="green-button" type="submit" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 6px; font-size: 1rem;">Add Item</button>
+
+                            <div style="display: none;">
+                                <input type="time" id="start_time" name="start_time" required>
+                                <input type="time" id="end_time" name="end_time" required>
+                            </div>
+
+                            <button type="button" id="record-btn" onclick="toggleRecording()" 
+                                    class="glass-button" 
+                                    style="width: 100%; padding: 15px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; letter-spacing: 1px; transition: all 0.3s; 
+                                        background-color: rgba(77, 182, 172, 0.8); color: white; border: 1px solid rgba(77, 182, 172, 1); cursor: pointer;">
+                                START SESSION
+                            </button>
+                            
+                            <button type="submit" id="submit-btn" class="glass-button" 
+                                    style="display: none; margin-top: 10px; width: 100%; padding: 15px; border-radius: 8px; font-size: 1rem; font-weight: bold; letter-spacing: 1px;
+                                        background-color: rgba(77, 182, 172, 0.8); color: white; border: 1px solid rgba(77, 182, 172, 1); cursor: pointer;">
+                                CONFIRM & LOG
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -103,7 +114,7 @@
             <div class="col-center" style="display: flex; flex-direction: column; gap: 25px;">
                 <div class="glass-container" style="display: flex; flex-direction: column; min-height: 250px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-                        <h4 class="glass-header-title"># Quick Note</h4>
+                        <h4 class="glass-header-title"># To-Do List</h4>
                         <span id="status-quick" class="glass-header-status">Daily Cleared</span>
                     </div>
                     <textarea id="quick_note_area" class="glass-textarea" 
@@ -166,7 +177,7 @@
                 </div>
 
                 <div class="glass-container" style="margin-top: 20px; padding: 15px;">
-                    <h4 class="glass-header-title" style="margin-bottom: 15px; font-size: 0.9rem;"># DATA MATRIX</h4>
+                    <h4 class="glass-header-title" style="margin-bottom: 15px; font-size: 0.9rem;"># Data Matrix</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; text-align: center;">
                             <div style="font-size: 0.7rem; color: #aaa;">LOGGED</div>
@@ -188,11 +199,20 @@
                 </div>
 
                 <div class="glass-container" style="margin-top: 20px; text-align: center;">
-                    <h4 class="glass-header-title" style="margin-bottom: 10px; font-size: 0.9rem;"># FOCUS PROTOCOL</h4>
-                    <div style="font-size: 2.5rem; font-family: monospace; font-weight: 700; margin: 10px 0; color: #e0e0e0;">25:00</div>
-                    <button class="hud-btn" style="margin-top: 0;">Start Timer</button>
-                </div>
+                    <h4 class="glass-header-title" style="margin-bottom: 15px; font-size: 0.9rem;"># Pomodoro</h4>
+                    <div id="pomo-cycle-dots" style="display: flex; justify-content: center; gap: 5px; margin-bottom: 5px;">
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                    </div>
 
+                    <div id="pomo-timer-display" style="font-size: 2.5rem; font-family: monospace; font-weight: 700; margin: 10px 0; color: #e0e0e0;">25:00</div>
+
+                    <div id="pomo-status-text" style="font-size: 0.8rem; color: #aaa; margin-bottom: 10px;">READY TO FOCUS</div>
+
+                    <button id="pomo-btn" class="hud-btn" style="margin-top: 0;" onclick="togglePomodoro()">INITIALIZE SEQUENCE</button>
+                </div>
             </div>
         </div>
 
