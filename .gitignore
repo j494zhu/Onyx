@@ -1,0 +1,11 @@
+venv/
+instance/
+__pycache__/
+*.db
+*.pyc
+reset_db.py
+index-issues.txt
+核心.txt
+草稿.txt
+check_models.py
+.env

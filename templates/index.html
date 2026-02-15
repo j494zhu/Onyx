@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian Logger</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index_body.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hud_style.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index_entry.css')}}">
+
+    <script src="{{ url_for('static', filename='scripts/rain.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/notebook.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/hud_logic.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/pomodoro.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/record_time.js') }}" defer></script>
+
+</head>
+<body>
+    <div>
+        <div class="header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="color: rgba(255, 255, 255, 0.808); font-weight: normal">
+                {{ current_user.username }}'s Log
+            </h2>
+
+            <div>
+                <a href="/history" class="history-link">View History</a>
+                <span style="margin: 0 15px; color: #ccc; border-left: 1px solid #ccc; height: 1em; display: inline-block; vertical-align: middle;"></span>
+                <a href="/logout" class="logout-link">Logout</a>
+            </div>
+        </div>
+
+        <div class="main-layout" style="display: grid; grid-template-columns: 1.8fr 1fr 0.8fr; gap: 25px; align-items: start; min-width: 0; max-width: 1400px; width: 95%; margin: 0 auto;">
+            <div class="col-left" style="min-width: 0;">
+                
+                <div style="display: grid; grid-template-columns: 0.6fr 1.5fr; gap: 15px; margin-bottom: 25px;">
+                    
+                    <div class="glass-container mild-white" style="padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border-color: whitesmoke; border-radius:15px">
+                        <div id="digital-clock" style="font-family: 'Consolas', 'Monaco', 'Andale Mono', monospace; font-size: 2.8rem; font-weight: 500; color: rgba(255,255,255,0.95); letter-spacing: 1px; white-space: nowrap;">
+                            00<span class="blink-colon">:</span>00
+                        </div>
+                    </div>
+
+                    <div class="glass-container mild-white" style="padding: 15px; display: flex; flex-direction: column; justify-content: center;">
+                        <form action='/' method='POST' id="log-form" style="margin: 0;">
+                            
+                            <input type="text" name="desc" id="desc_input" placeholder="Input log description..." required autocomplete="off"
+                                style="width: 100%; padding: 8px 0; margin-bottom: 15px; 
+                                        border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+                                        border-radius: 0; background-color: transparent; 
+                                        color: rgba(255,255,255,0.9); font-size: 0.95rem; transition: border-color 0.3s;">
+
+                            <div style="display: none;">
+                                <input type="time" id="start_time" name="start_time" required>
+                                <input type="time" id="end_time" name="end_time" required>
+                            </div>
+
+                            <button type="button" id="record-btn" onclick="toggleRecording()" 
+                                    style="width: 100%; padding: 10px; border-radius: 4px; 
+                                        font-size: 0.85rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+                                        background: rgba(255, 255, 255, 0.03); 
+                                        border: 1px solid rgba(255, 255, 255, 0.2); 
+                                        color: rgba(255, 255, 255, 0.6); 
+                                        cursor: pointer; transition: all 0.4s ease;">
+                                <span style="vertical-align: middle;">●</span> Start Session
+                            </button>
+                            
+                            <button type="submit" id="submit-btn" 
+                                    style="display: none; margin-top: 5px; width: 100%; padding: 10px; border-radius: 4px; 
+                                        font-size: 0.85rem; font-weight: 600; letter-spacing: 1px;
+                                        background: rgba(255, 255, 255, 0.1); 
+                                        border: 1px solid rgba(255, 255, 255, 0.5); 
+                                        color: white; cursor: pointer;">
+                                Confirm Log
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="glass-container mild-white" style="padding: 10px; margin-bottom: 20px; min-height: 300px;">
+                    <h1 class="section-title" style="margin-bottom: 15px; font-size: 0.9rem; color: rgba(255,255,255,0.4);"># HISTORY FLOW</h1>
+                    <table class="glass-table">
+                        <thead>
+                            <tr>
+                                <th width="5%">#</th>
+                                <th width="50%">Desc</th> <th width="15%">Start</th>
+                                <th width="15%">End</th>
+                                <th width="15%">DEL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in expenses %}
+                            <tr>
+                                <td style="opacity: 0.5;">{{ loop.index }}</td>
+                                <td style="font-weight: 500;">{{ item.desc }}</td>
+                                <td style="font-family: monospace; opacity: 0.7;">{{ item.start_time }}</td> 
+                                <td style="font-family: monospace; opacity: 0.7;">{{ item.end_time }}</td> 
+                                <td>
+                                    <form action="/delete/{{ item.id }}" method="POST" style="margin:0;">
+                                        <button type="submit" class="btn-delete-ghost" style="opacity: 0.3;">×</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            
+                            {% if expenses|length == 0 %}
+                            <tr>
+                                <td colspan="5" class="glass-empty-text" style="padding: 30px 0; color: rgba(255,255,255,0.2);">
+                                    — No Records Yet —
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="end-day-section" style="margin-top: 10px; margin-bottom: 60px; text-align: center; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
+                    <p style="color: rgba(255,255,255,0.3); font-size: 0.7rem; margin-bottom: 10px;">End of Watch?</p>
+                    <form action="/end_day" method="POST" onsubmit="return confirm('End Day? Quick Notes will be cleared.');">
+                        <button type="submit" class="red-button" style="background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3); color: #e74c3c;">
+                            Archive Day
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+
+            <div class="col-center" style="display: flex; flex-direction: column; gap: 25px; min-width: 0;">
+                <div class="glass-container" style="display: flex; flex-direction: column; min-height: 250px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                        <h4 class="glass-header-title"># To-Do List</h4>
+                        <span id="status-quick" class="glass-header-status">Daily Cleared</span>
+                    </div>
+                    <textarea id="quick_note_area" class="glass-textarea" 
+                        placeholder="Capture fleeing thoughts...">{{ current_user.quick_note }}</textarea>
+                </div>
+
+                <div class="glass-container" style="display: flex; flex-direction: column; flex: 1; min-height: 400px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                        <h4 class="glass-header-title"># NoteBook</h4>
+                        <span id="status-book" class="glass-header-status">Permanent</span>
+                    </div>
+                    <textarea id="notebook_area" class="glass-textarea"
+                        placeholder="Long-term storage...">{{ current_user.notebook }}</textarea>
+                </div>
+            </div>
+
+            <div class="col-right" style="position: sticky; top: 20px; min-width: 0;">
+                
+                <div class="glass-container ai-hud-module" style="display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                        <h4 class="glass-header-title">
+                            <span id="hud-status-dot" class="status-dot"></span>
+                            Neural Audit
+                        </h4>
+                        <span id="hud-status-text" class="glass-header-status">Standby</span>
+                    </div>
+
+                    <div class="hud-controls">
+                        <span class="control-label">TONE:</span>
+                        <div class="tone-selector">
+                            <input type="radio" id="tone-strict" name="ai_tone" value="strict" checked>
+                            <label for="tone-strict" title="Ruthless logic">STRICT</label>
+
+                            <input type="radio" id="tone-roast" name="ai_tone" value="roast">
+                            <label for="tone-roast" title="Emotional damage">ROAST</label>
+
+                            <input type="radio" id="tone-gentle" name="ai_tone" value="gentle">
+                            <label for="tone-gentle" title="Mental support">GENTLE</label>
+                        </div>
+                    </div>
+
+                    <div id="hud-content" class="hud-content-area">
+                        <div style="text-align: center;">
+                            <span id="hud-score-val" class="hud-score">--</span>
+                            <div class="hud-score-label">Productivity Score</div>
+                        </div>
+                        
+                        <div id="hud-insight-text" class="hud-insight">
+                            System Ready. Awaiting uplink...
+                        </div>
+                        
+                        <div id="hud-warning-box" class="hud-warning" style="display:none;">
+                            ⚠ <span id="hud-warn-text"></span>
+                        </div>
+                    </div>
+
+                    <button id="audit-btn" class="hud-btn" onclick="runNeuralAudit()">
+                        Initialize Scan
+                    </button>
+                </div>
+
+                <div class="glass-container" style="margin-top: 20px; padding: 15px;">
+                    <h4 class="glass-header-title" style="margin-bottom: 15px; font-size: 0.9rem;"># Data Matrix</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: #aaa;">LOGGED</div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #fff;">{{ total_hours | default('0')}}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: #aaa;">DEEP WORK</div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #2ecc71;">{{ deep_hours | default('0')}}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: #aaa;">STREAK</div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #f1c40f;">{{ current_user.streak }}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: #aaa;">SYSTEM</div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #3498db;">ON</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-container" style="margin-top: 20px; text-align: center;">
+                    <h4 class="glass-header-title" style="margin-bottom: 15px; font-size: 0.9rem;"># Pomodoro</h4>
+                    <div id="pomo-cycle-dots" style="display: flex; justify-content: center; gap: 5px; margin-bottom: 5px;">
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                        <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                    </div>
+
+                    <div id="pomo-timer-display" style="font-size: 2.5rem; font-family: monospace; font-weight: 700; margin: 10px 0; color: #e0e0e0;">25:00</div>
+
+                    <div id="pomo-status-text" style="font-size: 0.8rem; color: #aaa; margin-bottom: 10px;">READY TO FOCUS</div>
+
+                    <button id="pomo-btn" class="hud-btn" style="margin-top: 0;" onclick="togglePomodoro()">INITIALIZE SEQUENCE</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+
+</html>
