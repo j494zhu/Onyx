@@ -8,12 +8,16 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index_body.css')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hud_style.css')}}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index_entry.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chart_style.css')}}">
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='scripts/rain.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/notebook.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/hud_logic.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/pomodoro.js') }}" defer></script>
     <script src="{{ url_for('static', filename='scripts/record_time.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/chart_theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='scripts/chart_logic.js') }}"></script>
 
 </head>
 <body>
@@ -146,7 +150,40 @@
             </div>
 
             <div class="col-right" style="position: sticky; top: 20px; min-width: 0;">
-                
+
+                <div class="glass-container" id="analytics-module" style="display: flex; flex-direction: column; min-height: 320px; padding: 15px; margin-bottom: 20px; position: relative;">
+                    <div class="analytics-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
+                        <h4 class="glass-header-title" style="margin: 0; font-size: 0.9rem; letter-spacing: 1px; color: rgba(255,255,255,0.9);">
+                            DATA VISUALIZATION
+                        </h4>
+                        
+                        <div class="chart-controls" style="display: flex; gap: 5px;">
+                            <button class="chart-btn active" onclick="setChartType('doughnut')" title="Doughnut View">⭕</button>
+                            <button class="chart-btn" onclick="setChartType('bar')" title="Bar View">📊</button>
+                        </div>
+                    </div>
+
+                    <div class="chart-wrapper" style="position: relative; flex: 1; width: 100%; min-height: 200px; display: flex; justify-content: center; align-items: center;">
+                        
+                        <canvas id="distributionChart"></canvas>
+                        
+                        <div id="chart-overlay" class="chart-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20, 20, 20, 0.4); backdrop-filter: blur(4px); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; border-radius: 8px; transition: opacity 0.4s;">
+                            
+                            <p style="margin-bottom: 15px; color: rgba(255,255,255,0.7); font-size: 0.8rem; letter-spacing: 1px;">
+                                Awaiting Analysis Protocol
+                            </p>
+                            
+                            <button onclick="generateChart()" class="run-analysis-btn" style="background: rgba(0, 255, 65, 0.1); border: 1px solid rgba(0, 255, 65, 0.4); color: #00ff41; padding: 8px 16px; font-family: 'Consolas', monospace; text-transform: uppercase; letter-spacing: 1px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s; box-shadow: 0 0 10px rgba(0, 255, 65, 0.1);">
+                                <span class="btn-icon">⚡</span> Initialize
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="analytics-footer" style="margin-top: 15px; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.3); border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+                        <span id="total-tracked-time">Total Tracked: --h --m</span>
+                    </div>
+                </div>
+
                 <div class="glass-container ai-hud-module" style="display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
                         <h4 class="glass-header-title">

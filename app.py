@@ -13,7 +13,7 @@ from collections import OrderedDict
 from sqlalchemy import and_, or_
 
 from services.prompts import get_audit_prompt
-from services.stats import calculate_stats_from_logs
+from services.stats import calculate_stats_from_logs, calculate_duration
 from services.streak import update_user_streak
 
 from dotenv import load_dotenv
@@ -64,12 +64,12 @@ class Expenses(db.Model):
     start_time = db.Column(db.String, nullable=False)
     end_time = db.Column(db.String, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now)
-    
-    # 新增字段：归档控制
+
     is_archived = db.Column(db.Boolean, default=False) 
     archive_date = db.Column(db.Date, nullable=True)   # 记录这条数据属于哪一个"逻辑日"
-
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    category = db.Column(db.String(50), default="Uncategorized")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -358,7 +358,107 @@ def ai_audit():
         })
 
 
+@app.route('/api/visualize', methods=['POST'])
+@login_required
+def visualize_data():
+    # A. 获取今日有效数据 (Raw Data)
+    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+    
+    if not active_items:
+        return jsonify({"error": "No data to analyze"}), 400
 
+    # B. [Context Retrieval] 获取用户历史标签 (Memory)
+    # 这是为了保持分类的一致性 (Consistency)
+    existing_tags = []
+    try:
+        # 查询最近使用的前 20 个不重复标签
+        recent_tags_query = db.session.query(Expenses.category).filter(
+            Expenses.user_id == current_user.id,
+            Expenses.category != "Uncategorized",
+            Expenses.category != None
+        ).distinct().limit(20).all()
+        existing_tags = [row[0] for row in recent_tags_query if row[0]]
+    except Exception:
+        pass # 如果数据库刚重置，这里可能为空，忽略错误
+
+    tags_context = ", ".join(existing_tags) if existing_tags else "None yet"
+
+    # C. 构建数据包
+    entries_text = "\n".join([f"ID_{item.id}: [{item.start_time}-{item.end_time}] {item.desc}" for item in active_items])
+
+    # D. 构建 Prompt (High-Concept: Context-Aware Taxonomy)
+    prompt = f"""
+    You are a data taxonomy engine. Group the following logs into 3-6 high-level categories.
+    
+    [Context Memory]
+    Existing Tags: {tags_context}
+    (Prioritize using these tags if they fit. Create new ones only if necessary.)
+    
+    [Rules]
+    1. Categories must be concise (1-2 words, e.g., "Coding", "Deep Work").
+    2. Every entry must have exactly ONE category.
+    3. Return ONLY valid JSON mapping Entry IDs to Categories.
+    
+    [Input Data]
+    {entries_text}
+    
+    [Output Format]
+    {{ "ID_1": "Coding", "ID_2": "Break" }}
+    """
+
+    # E. 调用 xAI (Grok)
+    try:
+        payload = {
+            "model": "grok-4-1-fast-non-reasoning", # 或 gpt-4o-mini
+            "messages": [
+                {"role": "system", "content": "Output strictly JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1, # 低温以保证稳定
+            "stream": False
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {XAI_API_KEY}"
+        }
+        
+        # 发送请求
+        response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        
+        # 解析结果
+        ai_content = response.json()['choices'][0]['message']['content']
+        clean_json = ai_content.replace("```json", "").replace("```", "").strip()
+        mapping = json.loads(clean_json)
+
+    except Exception as e:
+        print(f"AI/Network Error: {e}")
+        # 如果 AI 挂了，返回一个空的结构，防止前端崩溃
+        return jsonify({"error": "Taxonomy Engine Failed"}), 500
+
+    # F. [Data Enrichment] 更新数据库 & 计算统计
+    stats = {} 
+    
+    for item in active_items:
+        key = f"ID_{item.id}"
+        # 获取分类 (如果 AI 漏了某个ID，回退到 'Uncategorized')
+        category = mapping.get(key, "Uncategorized")
+        
+        # 存入数据库 (持久化标签)
+        item.category = category
+        
+        # 累加时间
+        duration = calculate_duration(item.start_time, item.end_time)
+        stats[category] = stats.get(category, 0) + duration
+
+    db.session.commit()
+
+    # G. 返回前端绘图数据
+    return jsonify({
+        "labels": list(stats.keys()),
+        "data": list(stats.values()),
+        "total_minutes": sum(stats.values())
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)

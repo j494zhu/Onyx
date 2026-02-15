@@ -1,0 +1,116 @@
+/* static/dashboard_style.css */
+
+/* --- 仪表盘头部控制区 --- */
+.analytics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+/* 图表切换按钮组 */
+.chart-controls {
+    display: flex;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 2px;
+    border-radius: 6px;
+}
+
+.chart-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    transition: all 0.3s ease;
+}
+
+.chart-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* 激活状态 (JS 会切换这个类) */
+.chart-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+}
+
+/* --- 图表显示区域 --- */
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 220px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 遮罩层 (毛玻璃效果) */
+.chart-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 10, 10, 0.6); /* 深色遮罩 */
+    backdrop-filter: blur(4px);         /* 核心：毛玻璃模糊 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    border-radius: 8px;
+    transition: opacity 0.4s ease;
+}
+
+/* --- 核心按钮: Initialize Analysis --- */
+.run-analysis-btn {
+    /* 赛博朋克绿 */
+    background: rgba(0, 255, 65, 0.05); 
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    color: #00ff41;
+    
+    padding: 10px 20px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.05);
+    border-radius: 4px;
+}
+
+.run-analysis-btn:hover {
+    background: rgba(0, 255, 65, 0.15);
+    border-color: #00ff41;
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+    transform: translateY(-1px);
+}
+
+.run-analysis-btn:active {
+    transform: translateY(1px);
+}
+
+.run-analysis-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* 底部数据 */
+.analytics-footer {
+    margin-top: 15px;
+    text-align: right;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.3);
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-top: 8px;
+    font-family: monospace;
+}

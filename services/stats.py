@@ -32,3 +32,15 @@ def calculate_stats_from_logs(logs_list):
             continue
             
     return round(total_minutes / 60, 1), round(deep_minutes / 60, 1)
+
+def calculate_duration(start_str, end_str):
+    try:
+        fmt = "%H:%M"
+        t1 = datetime.strptime(start_str, fmt)
+        t2 = datetime.strptime(end_str, fmt)
+        if t2 < t1: # 处理跨天 (23:00 -> 01:00)
+            t2 += timedelta(days=1)
+        delta = t2 - t1
+        return int(delta.total_seconds() / 60)
+    except:
+        return 0

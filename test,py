@@ -1,0 +1,37 @@
+# mock_data.py
+# 用于强行修改数据库，制造"好看"的测试数据
+from app import app, db, Expenses
+
+def inject_mock_data():
+    with app.app_context():
+        # 获取今天的所有记录
+        logs = Expenses.query.filter_by(is_archived=False).all()
+        
+        print(f"Found {len(logs)} logs. Modifying timestamps...")
+        
+        # 强制修改前几条数据的时间，制造"长时间工作"的假象
+        if len(logs) > 0:
+            logs[0].desc = "Deep Work: Training Snake Agent (Rust)"
+            logs[0].start_time = "09:00"
+            logs[0].end_time = "11:30" # 2.5小时
+            
+        if len(logs) > 1:
+            logs[1].desc = "Math138 Review & Linear Algebra"
+            logs[1].start_time = "13:00"
+            logs[1].end_time = "14:45" # 1小时45分
+            
+        if len(logs) > 2:
+            logs[2].desc = "Lunch & Break"
+            logs[2].start_time = "12:00"
+            logs[2].end_time = "13:00" # 1小时
+
+        if len(logs) > 3:
+            logs[3].desc = "Fixing API Key Leak"
+            logs[3].start_time = "15:00"
+            logs[3].end_time = "15:20" # 20分钟
+
+        db.session.commit()
+        print("✅ Data successfully mocked! Refresh your page.")
+
+if __name__ == "__main__":
+    inject_mock_data()
