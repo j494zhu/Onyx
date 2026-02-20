@@ -1584,3 +1584,95 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE TOGGLE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Toggle container */
+.dm-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 56px;
+  height: 26px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration) var(--ease),
+              border-color var(--duration) var(--ease);
+  flex-shrink: 0;
+}
+
+.dm-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+/* Icons on each side */
+.dm-toggle__icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity var(--duration-fast);
+}
+
+.dm-toggle__icon--sun {
+  left: 6px;
+  color: #fbbf24;
+}
+
+.dm-toggle__icon--moon {
+  right: 6px;
+  color: #94a3b8;
+}
+
+/* Sliding thumb */
+.dm-toggle__slider {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: transform var(--duration) var(--ease),
+              background var(--duration) var(--ease);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Active state: slider moves to moon side */
+.dm-toggle.is-dark .dm-toggle__slider {
+  transform: translateX(30px);
+  background: #94a3b8;
+}
+
+/* Active state: highlight current icon */
+.dm-toggle.is-dark .dm-toggle__icon--moon {
+  opacity: 1;
+}
+.dm-toggle.is-dark .dm-toggle__icon--sun {
+  opacity: 0.35;
+}
+.dm-toggle:not(.is-dark) .dm-toggle__icon--sun {
+  opacity: 1;
+}
+.dm-toggle:not(.is-dark) .dm-toggle__icon--moon {
+  opacity: 0.35;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE BODY OVERRIDE
+   ═══════════════════════════════════════════════════════════════ */
+
+body.dark-mode {
+  background-image: none !important;
+  background-color: #000000 !important;
+}

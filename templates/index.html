@@ -17,6 +17,13 @@
   <header class="dash-header">
     <h2 class="dash-title">{{ current_user.username }}'s Log</h2>
     <nav class="dash-nav">
+      <!-- Dark Mode Toggle -->
+      <div class="dm-toggle" id="dm-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">
+        <span class="dm-toggle__icon dm-toggle__icon--sun">☀</span>
+        <span class="dm-toggle__icon dm-toggle__icon--moon">☽</span>
+        <span class="dm-toggle__slider" id="dm-slider"></span>
+      </div>
+      <span class="nav-divider">|</span>
       <a href="/history" class="nav-link nav-link--gold">View History</a>
       <span class="nav-divider">|</span>
       <button onclick="openWeeklyInsight()" class="nav-link nav-link--blue">Weekly Intel</button>
@@ -314,6 +321,27 @@
   <!-- ═══ SCRIPTS ═══════════════════════════════════════════ -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="{{ url_for('static', filename='scripts/dashboard.js') }}"></script>
+  <script>
+    /* ─── Dark Mode Toggle ─── */
+    (function() {
+      const toggle = document.getElementById('dm-toggle');
+      const stored = localStorage.getItem('onyx-dark-mode');
+
+      function applyDark(on) {
+        document.body.classList.toggle('dark-mode', on);
+        toggle.classList.toggle('is-dark', on);
+        localStorage.setItem('onyx-dark-mode', on ? '1' : '0');
+      }
+
+      // Restore preference on load
+      if (stored === '1') applyDark(true);
+
+      // Expose globally for onclick
+      window.toggleDarkMode = function() {
+        applyDark(!document.body.classList.contains('dark-mode'));
+      };
+    })();
+  </script>
 
 </body>
 </html>
