@@ -6,8 +6,8 @@
 
 **[🔴 Live Demo: onyx.j494zhu.com](https://onyx.j494zhu.com/login?next=%2F)** Onyx is a full-stack, AI-augmented analytics and time-management platform. Evolving beyond static productivity tools, Onyx integrates a proprietary **Human-in-the-Loop (HITL)** machine learning pipeline to continuously align its generative AI suggestions with user-specific workflows and preferences.
 
-![Onyx Dashboard Dark Mode](demo_images/index-dark.png)
-*(Onyx Dashboard in Dark Mode: Subpixel-perfect glassmorphism and real-time telemetry)*
+![Onyx Dashboard Light Mode](demo_images/index-light.png)
+*(Onyx Dashboard in Light Mode: Subpixel-perfect glassmorphism and real-time telemetry)*
 
 ## ✨ Core Features & System Modules
 
@@ -40,8 +40,8 @@ Onyx is engineered as a unified workspace, seamlessly blending manual telemetry 
 * **Dynamic Theme Engine:** Integrated a seamless Light/Dark mode toggle accessible from the top navigation bar, adapting the UI instantly to user environmental preferences.
 * **Subpixel-Perfect Glassmorphism:** Engineered a robust, modern UI featuring a frosted glass aesthetic. Successfully debugged and resolved complex subpixel rounding errors across different display scaling environments.
 
-![Onyx Dashboard Light Mode](demo_images/index-light.png)
-*(Onyx Dashboard dynamically rendered in Light Mode)*
+![Onyx Dashboard Dark Mode](demo_images/index-dark.png)
+*(Onyx Dashboard dynamically rendered in Dark Mode)*
 
 ---
 
