@@ -18,6 +18,12 @@ body {
     background-position: center;
     background-attachment: fixed;
 }
+html, body {
+    /* 匹配你 Onyx 背景最深处的颜色 */
+    background-color: #0d1117 !important; 
+    margin: 0;
+    padding: 0;
+}
 
 /* 核心容器：白色的卡片 */
 .container {
@@ -237,17 +243,7 @@ input[type="time"]:focus {
 
 
 /* --- 新增以下部分 --- */
-
-/* 3. 雨水画布的样式 */
-#rain-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none; /* 关键：让鼠标能穿透雨水点击输入框 */
-    z-index: 0; 
-}
+/*3. deleted style*/
 
 /* 4. 确保卡片里的内容（文字、输入框）浮在雨水上面 */
 /* 这里使用了通用选择器，意思是：glass-container里除了canvas以外的所有元素 */
