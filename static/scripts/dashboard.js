@@ -38,6 +38,226 @@ function hexToRgba(hex, alpha) {
   return `rgba(52,152,219,${alpha})`;
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getHistoryBody() {
+  return document.getElementById('history-table-body');
+}
+
+function reindexExpenseRows() {
+  const tbody = getHistoryBody();
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr[data-expense-id]');
+  rows.forEach((row, idx) => {
+    const indexCell = row.querySelector('.col-index');
+    if (indexCell) indexCell.textContent = String(idx + 1);
+  });
+}
+
+function ensureEmptyRowState() {
+  const tbody = getHistoryBody();
+  if (!tbody) return;
+
+  const hasRows = tbody.querySelector('tr[data-expense-id]') !== null;
+  const emptyRow = document.getElementById('history-empty-row');
+
+  if (hasRows && emptyRow) {
+    emptyRow.remove();
+  }
+
+  if (!hasRows && !emptyRow) {
+    const tr = document.createElement('tr');
+    tr.id = 'history-empty-row';
+    tr.innerHTML = '<td colspan="5" class="history-empty">— No Records Yet —</td>';
+    tbody.appendChild(tr);
+  }
+}
+
+function buildExpenseRow(expense) {
+  const tr = document.createElement('tr');
+  tr.id = `expense-row-${expense.id}`;
+  tr.dataset.expenseId = String(expense.id);
+  tr.innerHTML = `
+    <td class="col-index">1</td>
+    <td class="col-desc">${escapeHtml(expense.desc)}</td>
+    <td class="col-time">${escapeHtml(expense.start_time)}</td>
+    <td class="col-time">${escapeHtml(expense.end_time)}</td>
+    <td class="col-del">
+      <form action="/delete/${expense.id}" method="POST" class="js-delete-form" data-expense-id="${expense.id}" style="margin:0;">
+        <button type="submit" class="btn-delete">×</button>
+      </form>
+    </td>
+  `;
+  return tr;
+}
+
+function appendExpenseRow(expense) {
+  if (!expense || !expense.id) return;
+  const tbody = getHistoryBody();
+  if (!tbody) return;
+
+  const existing = tbody.querySelector(`tr[data-expense-id="${expense.id}"]`);
+  if (existing) return;
+
+  ensureEmptyRowState();
+  const row = buildExpenseRow(expense);
+  tbody.prepend(row);
+  reindexExpenseRows();
+}
+
+function removeExpenseRowById(expenseId) {
+  const tbody = getHistoryBody();
+  if (!tbody) return;
+
+  const row = tbody.querySelector(`tr[data-expense-id="${expenseId}"]`);
+  if (row) row.remove();
+
+  reindexExpenseRows();
+  ensureEmptyRowState();
+}
+
+async function postFormJson(action, formData) {
+  const response = await fetch(action, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json',
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Request failed');
+  }
+
+  return response.json();
+}
+
+let applyingRemoteNotebook = false;
+
+function applyNotebookUpdate(payload) {
+  if (!payload || !payload.type) return;
+
+  const isQuick = payload.type === 'quick_note';
+  const textarea = document.getElementById(isQuick ? 'quick_note_area' : 'notebook_area');
+  const statusSpan = document.getElementById(isQuick ? 'status-quick' : 'status-book');
+
+  if (!textarea) return;
+
+  const incoming = payload.content || '';
+  if (textarea.value !== incoming) {
+    applyingRemoteNotebook = true;
+    textarea.value = incoming;
+    applyingRemoteNotebook = false;
+  }
+  textarea.dataset.lastRemoteValue = incoming;
+
+  if (statusSpan && payload.saved_at) {
+    statusSpan.innerText = 'Saved ' + payload.saved_at;
+  }
+}
+
+function setupAjaxExpenseActions() {
+  const form = document.getElementById('log-form');
+  const tbody = getHistoryBody();
+  if (!form || !tbody) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    try {
+      const data = await postFormJson(form.action, new FormData(form));
+      if (data && data.expense) {
+        appendExpenseRow(data.expense);
+      }
+
+      const submitBtn = document.getElementById('submit-btn');
+      const recordBtn = document.getElementById('record-btn');
+      const descInput = document.getElementById('desc_input');
+      const startInput = document.getElementById('start_time');
+      const endInput = document.getElementById('end_time');
+
+      if (submitBtn) submitBtn.style.display = 'none';
+      if (recordBtn) {
+        recordBtn.style.display = 'block';
+        recordBtn.innerHTML = '● Start Session';
+      }
+      if (descInput) descInput.value = '';
+      if (startInput) startInput.value = '';
+      if (endInput) endInput.value = '';
+      isRecordingSession = false;
+    } catch (e) {
+      form.submit();
+    }
+  });
+
+  tbody.addEventListener('submit', async (event) => {
+    const deleteForm = event.target.closest('form.js-delete-form');
+    if (!deleteForm) return;
+
+    event.preventDefault();
+
+    try {
+      const data = await postFormJson(deleteForm.action, new FormData(deleteForm));
+      if (data && data.id) {
+        removeExpenseRowById(String(data.id));
+      }
+    } catch (e) {
+      deleteForm.submit();
+    }
+  });
+}
+
+function setupEventStream() {
+  if (!window.EventSource) return;
+
+  const source = new EventSource('/api/events');
+
+  source.addEventListener('expense_created', (event) => {
+    try {
+      appendExpenseRow(JSON.parse(event.data));
+    } catch (e) {
+      console.error('Failed to parse expense_created event', e);
+    }
+  });
+
+  source.addEventListener('expense_deleted', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload && payload.id != null) {
+        removeExpenseRowById(String(payload.id));
+      }
+    } catch (e) {
+      console.error('Failed to parse expense_deleted event', e);
+    }
+  });
+
+  source.addEventListener('notebook_updated', (event) => {
+    try {
+      applyNotebookUpdate(JSON.parse(event.data));
+    } catch (e) {
+      console.error('Failed to parse notebook_updated event', e);
+    }
+  });
+
+  source.addEventListener('heartbeat', () => {
+    const body = document.body;
+    if (body) body.dataset.sseHeartbeatAt = String(Date.now());
+  });
+
+  source.onerror = () => {
+    // EventSource reconnects automatically; keep this non-fatal.
+    console.warn('SSE connection interrupted; waiting for reconnect.');
+  };
+}
+
 
 // ═══════════════════════════════════════════
 //  2. DIGITAL CLOCK
@@ -97,6 +317,8 @@ function toggleRecording() {
 // ═══════════════════════════════════════════
 
 function saveNote(type, content, statusId) {
+  if (applyingRemoteNotebook) return;
+
   const statusSpan = document.getElementById(statusId);
   if (statusSpan) statusSpan.innerText = 'Saving...';
 
@@ -115,6 +337,10 @@ function saveNote(type, content, statusId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupAjaxExpenseActions();
+  setupEventStream();
+  ensureEmptyRowState();
+
   const quickInput = document.getElementById('quick_note_area');
   const bookInput = document.getElementById('notebook_area');
 
@@ -122,6 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
     quickInput.addEventListener(
       'input',
       debounce(function () {
+        if (applyingRemoteNotebook) return;
+        if (this.value === (this.dataset.lastRemoteValue || '')) return;
         saveNote('quick_note', this.value, 'status-quick');
       }, 1000)
     );
@@ -130,6 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
     bookInput.addEventListener(
       'input',
       debounce(function () {
+        if (applyingRemoteNotebook) return;
+        if (this.value === (this.dataset.lastRemoteValue || '')) return;
         saveNote('notebook', this.value, 'status-book');
       }, 1000)
     );

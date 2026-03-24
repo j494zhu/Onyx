@@ -103,3 +103,50 @@ The system acts on feedback dynamically. Before each Neural Audit or Weekly Inte
 
 * **Phase 3 (Reward Model):** Train a lightweight reward model (sentence embeddings + classifier) on the accumulated preference data to score candidate suggestions before they reach the user (**Best-of-N sampling**).
 * **Phase 4 (Local SLM):** Transition the pipeline to support **DPO (Direct Preference Optimization)** on a Small Language Model (e.g., Llama 3 / Phi-3) via `Ollama` for fully offline, private AI inference.
+
+---
+
+## 🔄 Multi-Device Real-Time Sync (SSE + Redis)
+
+Onyx now supports user-scoped real-time sync on the dashboard page across tabs, devices, and Gunicorn workers.
+
+### What syncs in real time
+* Expense created (`expense_created`)
+* Expense deleted (`expense_deleted`)
+* Notebook updates (`notebook_updated`)
+
+### Transport architecture
+* Browser opens an authenticated SSE stream at `/api/events`.
+* Backend publishes user events to Redis pub/sub channels: `onyx:user:<user_id>`.
+* Any worker can publish; any worker serving SSE can consume and forward to the correct client.
+* Heartbeat events are sent every ~25 seconds to keep long-lived streams healthy.
+
+### Environment variables
+Add the following variables to your `.env` file:
+
+```env
+REDIS_URL=redis://localhost:6379/0
+REDIS_CHANNEL_PREFIX=onyx:user
+SSE_HEARTBEAT_SECONDS=25
+```
+
+For local development with no Redis password, default `localhost:6379` works out of the box.
+
+### Install dependency
+
+```bash
+pip install -r requirements.txt
+```
+
+### Verification checklist
+1. Open the dashboard as the same user on two devices/tabs.
+2. Add an expense on device A and verify device B updates without reload.
+3. Delete an expense on device A and verify device B row disappears.
+4. Update quick note/notebook on device A and verify device B auto-replaces content.
+5. Run with multiple workers and confirm cross-worker sync still works.
+
+### Troubleshooting
+* SSE not updating: verify Redis is running and `REDIS_URL` is reachable.
+* Events not crossing workers: ensure all workers point to the same Redis instance.
+* Stream endpoint unauthorized: `/api/events` requires a logged-in session.
+* Reverse proxy buffering: keep `X-Accel-Buffering: no` behavior enabled for SSE.

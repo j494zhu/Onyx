@@ -1,12 +1,16 @@
+from gevent import monkey
+monkey.patch_all() 
 import os
 import json
+import time
 import requests
 from groq import Groq
 
-from flask import Flask, render_template, request, redirect, session, flash, jsonify
+import redis
+from flask import Flask, render_template, request, redirect, session, flash, jsonify, Response, stream_with_context
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from itertools import groupby
 from collections import OrderedDict
 from sqlalchemy import and_, or_
@@ -24,6 +28,31 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 XAI_API_KEY = os.environ.get('XAI_API_KEY')
 
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_CHANNEL_PREFIX = os.environ.get('REDIS_CHANNEL_PREFIX', 'onyx:user')
+SSE_HEARTBEAT_SECONDS = int(os.environ.get('SSE_HEARTBEAT_SECONDS', '25'))
+
+EVENT_EXPENSE_CREATED = 'expense_created'
+EVENT_EXPENSE_DELETED = 'expense_deleted'
+EVENT_NOTEBOOK_UPDATED = 'notebook_updated'
+EVENT_HEARTBEAT = 'heartbeat'
+
+EVENT_PAYLOAD_SCHEMA = {
+    EVENT_EXPENSE_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
+    EVENT_EXPENSE_DELETED: ('id',),
+    EVENT_NOTEBOOK_UPDATED: ('type', 'content', 'saved_at'),
+}
+
+SSE_EVENT_NAMES = set(EVENT_PAYLOAD_SCHEMA.keys())
+
+redis_client = None
+try:
+    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+    redis_client.ping()
+except Exception as redis_error:
+    print(f"Redis init failed at {REDIS_URL}: {redis_error}")
+    redis_client = None
+
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -34,6 +63,55 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+def user_event_channel(user_id):
+    return f"{REDIS_CHANNEL_PREFIX}:{user_id}"
+
+
+def serialize_expense(expense):
+    return {
+        'id': expense.id,
+        'desc': expense.desc,
+        'start_time': expense.start_time,
+        'end_time': expense.end_time,
+        'timestamp': expense.timestamp.isoformat() if expense.timestamp else None,
+    }
+
+
+def is_ajax_request(req):
+    return (
+        req.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in req.headers.get('Accept', '')
+    )
+
+
+def publish_user_event(user_id, event_name, payload):
+    if event_name not in SSE_EVENT_NAMES:
+        app.logger.warning('SSE publish skipped: unknown event=%s', event_name)
+        return False
+
+    if redis_client is None:
+        app.logger.warning('SSE publish skipped: Redis unavailable event=%s user_id=%s', event_name, user_id)
+        return False
+
+    message = {
+        'event': event_name,
+        'data': payload,
+        'sent_at': datetime.utcnow().isoformat() + 'Z',
+    }
+
+    try:
+        channel = user_event_channel(user_id)
+        redis_client.publish(channel, json.dumps(message))
+        return True
+    except Exception as e:
+        app.logger.exception('SSE publish failed event=%s user_id=%s error=%s', event_name, user_id, str(e))
+        return False
+
+
+def format_sse(event_name, data):
+    return f"event: {event_name}\ndata: {json.dumps(data)}\n\n"
 
 # --- Helper: calculate logical date ---
 def get_logical_date(dt_obj):
@@ -47,7 +125,7 @@ def get_logical_date(dt_obj):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # Auto-create tables when the app starts.
 with app.app_context():
@@ -80,8 +158,16 @@ def index(): # get user lgo entry;
             db.session.add(item)
             update_user_streak(current_user, logical_date)
             db.session.commit()
+
+            payload = serialize_expense(item)
+            publish_user_event(current_user.id, EVENT_EXPENSE_CREATED, payload)
+
+            if is_ajax_request(request):
+                return jsonify({'status': 'success', 'expense': payload})
             return redirect('/')
         except Exception as e:
+            if is_ajax_request(request):
+                return jsonify({'status': 'error', 'message': str(e)}), 500
             return f'Error: {str(e)}'
 
     # 2. GET: render homepage
@@ -254,10 +340,16 @@ def delete(id):
     if (del_item.user_id != current_user.id):
         return "Unauthorized"
     try:
+        deleted_id = del_item.id
         db.session.delete(del_item)
         db.session.commit()
+        publish_user_event(current_user.id, EVENT_EXPENSE_DELETED, {'id': deleted_id})
+        if is_ajax_request(request):
+            return jsonify({'status': 'success', 'id': deleted_id})
         return redirect('/')
     except Exception as e:
+        if is_ajax_request(request):
+            return jsonify({'status': 'error', 'message': str(e)}), 500
         return f"Error deleting item: {e}"
 
 @app.route('/register', methods=['POST', 'GET'])
@@ -323,7 +415,71 @@ def save_notes():
         current_user.notebook = content
 
     db.session.commit()
-    return jsonify({"status": "success", "saved_at": datetime.now().strftime("%H:%M:%S")})
+    saved_at = datetime.now().strftime("%H:%M:%S")
+    publish_user_event(current_user.id, EVENT_NOTEBOOK_UPDATED, {
+        'type': note_type,
+        'content': content,
+        'saved_at': saved_at,
+    })
+    return jsonify({"status": "success", "saved_at": saved_at})
+
+
+@app.route('/api/events', methods=['GET'])
+@login_required
+def stream_events():
+    user_id = current_user.id
+    channel = user_event_channel(user_id)
+
+    @stream_with_context
+    def event_stream():
+        pubsub = None
+        last_heartbeat = time.monotonic()
+        app.logger.info('SSE connect user_id=%s channel=%s', user_id, channel)
+        try:
+            if redis_client is None:
+                app.logger.warning('SSE stream unavailable: Redis unavailable user_id=%s', user_id)
+                yield format_sse(EVENT_HEARTBEAT, {'status': 'redis_unavailable'})
+                return
+
+            pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(channel)
+
+            while True:
+                message = pubsub.get_message(timeout=1.0)
+                if message and message.get('type') == 'message':
+                    try:
+                        payload = json.loads(message.get('data') or '{}')
+                    except Exception:
+                        payload = {}
+
+                    event_name = payload.get('event')
+                    event_data = payload.get('data', {})
+                    if event_name in SSE_EVENT_NAMES:
+                        yield format_sse(event_name, event_data)
+                        last_heartbeat = time.monotonic()
+
+                if time.monotonic() - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
+                    yield format_sse(EVENT_HEARTBEAT, {'ts': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')})
+                    last_heartbeat = time.monotonic()
+                gevent.sleep(0.01)
+        except GeneratorExit:
+            app.logger.info('SSE disconnect user_id=%s channel=%s reason=client_closed', user_id, channel)
+        except Exception as e:
+            app.logger.exception('SSE stream error user_id=%s error=%s', user_id, str(e))
+        finally:
+            if pubsub is not None:
+                try:
+                    pubsub.unsubscribe(channel)
+                    pubsub.close()
+                except Exception:
+                    pass
+            app.logger.info('SSE cleanup user_id=%s channel=%s', user_id, channel)
+
+    response = Response(event_stream(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @app.route('/api/ai/audit', methods=['POST'])
@@ -628,7 +784,7 @@ def generate_weekly_insight():
         # --- [FALLBACK] Mock Data (avoid failures before API key setup) ---
         # --- Once API is connected, remove or comment this block out. ---
         import time
-        time.sleep(1.5) 
+        gevent.sleep(1.5)
         ai_data = {
             "week_label": "The Recursive Feedback Loop",
             "neural_phase": "HYPER-DRIVE",
@@ -648,7 +804,10 @@ def generate_weekly_insight():
         return jsonify({"status": "error", "message": f"Neural Link Severed: {str(e)}"}), 500
     
 if __name__ == '__main__':
-    app.run(debug=True)
+    from gevent.pywsgi import WSGIServer
+    http_server = WSGIServer(('127.0.0.1', 5000), app)
+    print("Gevent Server started on http://127.0.0.1:5000")
+    http_server.serve_forever()
 
 
 #  git checkout -b ai-integration
