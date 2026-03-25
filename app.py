@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date, timezone
 from itertools import groupby
 from collections import OrderedDict
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from model import db, User, Expenses, AlignmentSignal
 
 from services.prompts import get_audit_prompt, get_weekly_audit_prompt
@@ -23,6 +23,9 @@ from services.history_helper import calculate_duration_minutes, build_day_stats
 
 from dotenv import load_dotenv
 load_dotenv()  # Auto-load variables from the .env file.
+
+import click
+from flask.cli import with_appcontext ###   SPELLING MISTAKE---
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
@@ -56,7 +59,13 @@ except Exception as redis_error:
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///site.db'
+if not database_url:
+    sqlite_db_path = os.path.join(app.root_path, 'data', 'site.db')
+    os.makedirs(os.path.dirname(sqlite_db_path), exist_ok=True)
+    database_url = f"sqlite:///{sqlite_db_path}"
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+
+
 
 db.init_app(app)
 
@@ -127,9 +136,22 @@ def get_logical_date(dt_obj):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# Auto-create tables when the app starts.
-with app.app_context():
-    db.create_all()
+def initialize_database():
+    with app.app_context():
+        engine = db.engine
+        if engine.dialect.name == 'postgresql':
+            lock_id = 987654321
+            with engine.connect() as conn:
+                conn.execute(text("SELECT pg_advisory_lock(:lock_id)"), {"lock_id": lock_id})
+                try:
+                    db.create_all()
+                finally:
+                    conn.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+        else:
+            db.create_all()
+
+
+initialize_database()
 
 # --- Route logic ---
 
@@ -234,7 +256,7 @@ def end_day():
 def history():
     """History page: day/week pagination with timeline navigation and daily stats."""
 
-    # ── 1. Parse params ──────────────────────────────────
+    # 1. Parse params 
     mode = request.args.get('mode', 'day')
     offset = request.args.get('offset', 0, type=int)
 
@@ -250,7 +272,7 @@ def history():
         end_date = start_date
         label = start_date.strftime('%Y-%m-%d (%A)')
 
-    # ── 2. Database query ───────────────────────────────
+    #  2. Database query 
     items = Expenses.query.filter(
         Expenses.user_id == current_user.id,
         Expenses.is_archived == True,
@@ -262,7 +284,7 @@ def history():
         Expenses.timestamp.desc()
     ).all()
 
-    # ── 3. Group by date + calculate daily stats ────────────────
+    # 3. Group by date + calculate daily stats 
     grouped_history = OrderedDict()  # { date: { 'items': [...], 'stats': {...} } }
 
     for archive_date, group in groupby(items, key=lambda x: x.archive_date):
@@ -272,13 +294,13 @@ def history():
             'stats': build_day_stats(day_items),
         }
 
-    # ── 4. Range-level summary stats (top section) ───────────────
+    # 4. Range-level summary stats (top section) 
     total_entries = len(items)
     range_total_min = sum(d['stats']['total_minutes'] for d in grouped_history.values())
     range_total_hours = f"{range_total_min / 60:.1f}h"
     range_days = len(grouped_history)
 
-    # ── 5. Navigation boundaries ─────────────────────────────────
+    # 5. Navigation boundaries 
     if mode == 'week':
         next_disabled = (start_date + timedelta(weeks=1)) > today
     else:
@@ -803,6 +825,18 @@ def generate_weekly_insight():
         print(f"Neural Link Error: {e}")
         return jsonify({"status": "error", "message": f"Neural Link Severed: {str(e)}"}), 500
     
+
+@app.cli.command("count-users")
+@with_appcontext
+def count_users():
+    # return total number of users
+    user_count = User.query.count()
+    
+    click.echo(f"--------------------------")
+    click.echo(f" # of users: {user_count} ")
+    click.echo(f"--------------------------")
+
+
 if __name__ == '__main__':
     from gevent.pywsgi import WSGIServer
     http_server = WSGIServer(('127.0.0.1', 5000), app)

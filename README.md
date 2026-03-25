@@ -125,6 +125,10 @@ Onyx now supports user-scoped real-time sync on the dashboard page across tabs, 
 Add the following variables to your `.env` file:
 
 ```env
+POSTGRES_DB=onyx
+POSTGRES_USER=onyx
+POSTGRES_PASSWORD=change_me
+DATABASE_URL=postgresql://onyx:change_me@postgres:5432/onyx
 REDIS_URL=redis://localhost:6379/0
 REDIS_CHANNEL_PREFIX=onyx:user
 SSE_HEARTBEAT_SECONDS=25
@@ -137,6 +141,16 @@ For local development with no Redis password, default `localhost:6379` works out
 ```bash
 pip install -r requirements.txt
 ```
+
+### Run with Docker Compose
+
+```bash
+cp sample.env .env
+docker compose up --build
+```
+
+Docker runtime uses PostgreSQL (`postgres` service) and Redis (`redis` service).
+For container-to-container connectivity, `DATABASE_URL` should target host `postgres` and `REDIS_URL` should target host `redis`.
 
 ### Verification checklist
 1. Open the dashboard as the same user on two devices/tabs.

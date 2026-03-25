@@ -1,0 +1,46 @@
+services:
+  web:
+    build: .
+    container_name: onyx_web
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env  
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-onyx}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-onyx}
+      # Override the default Redis connection string to allow 
+      # flask to connect to the Redis instance inside the Docker
+      - REDIS_URL=redis://redis:6379/0 
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: onyx_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-onyx}
+      - POSTGRES_USER=${POSTGRES_USER:-onyx}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onyx} -d ${POSTGRES_DB:-onyx}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: onyx_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data  # permenant redis data
+
+volumes:
+  redis_data:
+  postgres_data:
