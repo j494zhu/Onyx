@@ -607,7 +607,12 @@ def visualize_data():
     active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
     
     if not active_items:
-        return jsonify({"error": "No data to analyze"}), 400
+        return jsonify({
+            "labels": ["暂无数据"],
+            "data": [0],
+            "total_minutes": 0,
+            "message": "No data to analyze"
+        }), 200
 
     # B. [Context Retrieval] Fetch user's historical tags (Memory)
     # This helps maintain consistent categorization.

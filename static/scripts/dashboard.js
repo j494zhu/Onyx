@@ -514,7 +514,7 @@ function showLoader(el, show) {
   el.setAttribute('aria-hidden', String(!show));
 }
 
-async function fetchChartData() {
+async function fetchChartData() { 
   try {
     const res = await fetch('/api/visualize', {
       method: 'POST',
