@@ -3,7 +3,8 @@ services:
     build: .
     container_name: onyx_web
     ports:
-      - "5000:5000"
+      # Bind to localhost only; Nginx on the host reverse-proxies to this.
+      - "127.0.0.1:5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,7 +38,8 @@ services:
     image: redis:alpine
     container_name: onyx_redis
     ports:
-      - "6379:6379"
+      # Localhost only — never expose Redis to the public internet.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data  # permenant redis data
 
