@@ -156,7 +156,7 @@ body {
     "history  note    matrix  pomo"
     "archive  note    matrix  pomo";
   grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
-  grid-template-rows: 130px 1fr 1fr 46px;
+  grid-template-rows: 160px 1fr 1fr 46px;
   gap: var(--gap);
   width: 100%;
   max-width: 1700px;

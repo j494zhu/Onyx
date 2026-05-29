@@ -305,7 +305,12 @@ function toggleRecording() {
     btn.style.display = 'none';
     btn.classList.remove('is-recording');
     submitBtn.style.display = 'block';
-    submitBtn.innerHTML = `Confirm <span style="font-weight:normal;opacity:0.6;font-size:0.8em;margin-left:5px;">${inputStart.value} – ${inputEnd.value}</span>`;
+    submitBtn.innerHTML = `Confirm Log`;
+
+    // 显示可编辑的开始/结束时间行（默认填入刚记录的时间，用户可手动修改）
+    const timeRow = document.getElementById('time-edit-row');
+    if (timeRow) timeRow.style.display = 'flex';
+
     if (clockEl) clockEl.style.color = 'rgba(255,255,255,0.85)';
     if (descInput) descInput.focus();
   }
@@ -598,6 +603,12 @@ async function runNeuralAudit() {
   const toneInput = document.querySelector('input[name="ai_tone"]:checked');
   const selectedTone = toneInput ? toneInput.value : 'strict';
 
+  // 用浏览器获取用户真实本地时间，传给后端（服务器/容器时区多为 UTC，不可靠）
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const clientTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} (${weekday})`;
+
   btn.disabled = true;
   btn.innerText = 'UPLINKING...';
   statusDot.style.backgroundColor = 'var(--neon-yellow)';
@@ -610,7 +621,7 @@ async function runNeuralAudit() {
     const response = await fetch('/api/ai/audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tone: selectedTone }),
+      body: JSON.stringify({ tone: selectedTone, client_time: clientTime }),
     });
     if (!response.ok) throw new Error('Connection Refused');
     const data = await response.json();

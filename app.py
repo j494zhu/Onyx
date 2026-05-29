@@ -30,7 +30,7 @@ from flask.cli import with_appcontext ###   SPELLING MISTAKE---
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
-XAI_API_KEY = os.environ.get('XAI_API_KEY')
+DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
 
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 REDIS_CHANNEL_PREFIX = os.environ.get('REDIS_CHANNEL_PREFIX', 'onyx:user')
@@ -525,8 +525,10 @@ def ai_audit():
     session['last_audit_time'] = now.isoformat()
 
     # --- 2. Collect data (unchanged) ---
-    data = request.get_json() or {} 
+    data = request.get_json() or {}
     user_tone = data.get('tone', 'strict')
+    # 用户真实本地时间（前端浏览器获取并传来）；容器时区多为 UTC，不能直接用服务器时间。
+    client_time = data.get('client_time')
     
     logical_date = get_logical_date(datetime.now())
     today_logs = Expenses.query.filter(
@@ -544,40 +546,46 @@ def ai_audit():
     quick_note = current_user.quick_note
 
     # Build prompt text
-    prompt_text = get_audit_prompt(notebook, quick_note, logs_data, tone=user_tone)
+    prompt_text = get_audit_prompt(notebook, quick_note, logs_data, tone=user_tone, current_time=client_time)
 
-    # --- 3. Call Grok API (core change point) ---
+    # Tone-dependent temperature: gentle is warm/creative, strict stays tight.
+    tone_temperature = {"gentle": 1.0, "roast": 0.8, "strict": 0.5}
+    audit_temperature = tone_temperature.get(user_tone, 0.5)
+
+    # --- 3. Call DeepSeek API (core change point) ---
     # Key should come from env vars (already configured above).
 
-    
-    # Build x.ai OpenAI-compatible request payload.
+
+    # Build DeepSeek OpenAI-compatible request payload.
     payload = {
         # Fast and cost-effective model choice.
-        "model": "grok-4-1-fast-non-reasoning", 
-        
+        "model": "deepseek-v4-flash",
+
         "messages": [
             {
-                "role": "system", 
-                "content": "You are a concise log classifier. Always output valid JSON."
+                "role": "system",
+                "content": "You are the user's personal secretary. Stay fully in the persona and voice "
+                           "defined in the user message, and always reply with ONLY a single raw JSON object."
             },
             {
-                "role": "user", 
+                "role": "user",
                 "content": prompt_text
             }
         ],
-        "temperature": 0.1, # Keep low for stable classification.
-        "stream": False
+        "temperature": audit_temperature, # Tone-dependent (gentle warmer, strict tighter).
+        "stream": False,
+        "thinking": {"type": "disabled"} # Disable chain-of-thought for speed.
     }
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {XAI_API_KEY}"
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
     }
 
     try:
         # Send POST request via requests.
         response = requests.post(
-            "https://api.x.ai/v1/chat/completions", 
+            "https://api.deepseek.com/chat/completions",
             headers=headers, 
             json=payload,
             timeout=30 # Timeout safeguard.
@@ -592,11 +600,11 @@ def ai_audit():
         return jsonify(json.loads(clean_json))
 
     except Exception as e:
-        print(f"Grok Error: {str(e)}")
+        print(f"DeepSeek Error: {str(e)}")
         return jsonify({
-            "score": 0, 
-            "status": "red", 
-            "insight": "Grok Connection Failed", 
+            "score": 0,
+            "status": "red",
+            "insight": "DeepSeek Connection Failed",
             "warning": f"Technical details: {str(e)}"
         })
 
@@ -654,24 +662,25 @@ def visualize_data():
     {{ "ID_1": "Coding", "ID_2": "Break" }}
     """
 
-    # E. Call xAI (Grok)
+    # E. Call DeepSeek
     try:
         payload = {
-            "model": "grok-4-1-fast-non-reasoning", # or gpt-4o-mini
+            "model": "deepseek-v4-flash",
             "messages": [
                 {"role": "system", "content": "Output strictly JSON."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.1, # Low temperature for stable output.
-            "stream": False
+            "stream": False,
+            "thinking": {"type": "disabled"} # Disable chain-of-thought for speed.
         }
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {XAI_API_KEY}"
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
         }
-        
+
         # Send request
-        response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        response = requests.post("https://api.deepseek.com/chat/completions", headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         
         # Parse response
