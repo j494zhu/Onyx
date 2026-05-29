@@ -901,7 +901,11 @@ function updatePomoDisplay() {
   const m = Math.floor(pomoLeft / 60);
   const s = pomoLeft % 60;
   display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  document.title = `(${m}:${s.toString().padStart(2, '0')}) Onyx`;
+  // Only surface the countdown in the tab title while actively running;
+  // otherwise (not started / paused / finished) restore the plain title.
+  document.title = isPomoRunning
+    ? `(${m}:${s.toString().padStart(2, '0')}) Onyx`
+    : 'Onyx — Neural Engine';
 
   let totalTime = currentPhase === 'WORK' ? WORK_TIME : currentPhase === 'SHORT' ? SHORT_BREAK : LONG_BREAK;
   const progress = ((totalTime - pomoLeft) / totalTime) * 100;
