@@ -48,9 +48,16 @@
           class="session-form__input"
           placeholder="Input log description..."
           required autocomplete="off">
-        <div class="session-form__hidden">
-          <input type="time" id="start_time" name="start_time" required>
-          <input type="time" id="end_time" name="end_time" required>
+        <div class="session-form__times" id="time-edit-row">
+          <label class="time-edit__field">
+            <span class="time-edit__label">Start</span>
+            <input type="time" id="start_time" name="start_time" required>
+          </label>
+          <span class="time-edit__dash">–</span>
+          <label class="time-edit__field">
+            <span class="time-edit__label">End</span>
+            <input type="time" id="end_time" name="end_time" required>
+          </label>
         </div>
         <button type="button" id="record-btn" class="btn-session btn-session--cta" onclick="toggleRecording()">
           ● Start Session

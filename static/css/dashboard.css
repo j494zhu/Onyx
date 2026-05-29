@@ -294,8 +294,47 @@ body {
   border-bottom-color: var(--border-strong);
 }
 
-.session-form__hidden {
+/* Editable start/end time row — shown only in the confirm state */
+.session-form__times {
   display: none;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.time-edit__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.time-edit__label {
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.time-edit__field input[type="time"] {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9rem;
+  padding: 3px 0;
+  outline: none;
+  color-scheme: dark;
+  transition: border-color var(--duration) ease;
+}
+
+.time-edit__field input[type="time"]:focus {
+  border-bottom-color: var(--border-strong);
+}
+
+.time-edit__dash {
+  color: var(--text-muted);
+  padding-bottom: 5px;
 }
 
 .btn-session {

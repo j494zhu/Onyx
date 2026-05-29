@@ -60,7 +60,11 @@ function toggleRecording() {
         // UI 切换
         btn.style.display = "none";
         submitBtn.style.display = "block";
-        submitBtn.innerHTML = `Confirm <span style="font-weight:normal; opacity:0.7; font-size:0.8em; margin-left:5px;">${inputStart.value} - ${inputEnd.value}</span>`;
+        submitBtn.innerHTML = `Confirm Log`;
+
+        // 显示可编辑的开始/结束时间行（默认填入刚记录的时间，用户可手动修改）
+        const timeRow = document.getElementById('time-edit-row');
+        if (timeRow) timeRow.style.display = "flex";
         
         // 停止动画
         btn.style.animation = "none";
