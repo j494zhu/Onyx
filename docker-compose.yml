@@ -37,9 +37,9 @@ services:
   redis:
     image: redis:alpine
     container_name: onyx_redis
-    ports:
-      # Localhost only — never expose Redis to the public internet.
-      - "127.0.0.1:6379:6379"
+    # No host port mapping: the web container reaches Redis over the Compose
+    # network (redis:6379). Not exposed to the host or the public internet,
+    # which also avoids clashing with any Redis already running on the host.
     volumes:
       - redis_data:/data  # permenant redis data
 
