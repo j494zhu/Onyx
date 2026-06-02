@@ -77,6 +77,26 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 
+@app.url_defaults
+def _static_cache_bust(endpoint, values):
+    """Append a per-file version (?v=<mtime>) to every static URL.
+
+    Each deploy rewrites changed static files with a new mtime, so the URL
+    changes and any cached copy (browser or the Nginx in front) is bypassed
+    automatically — no manual hard-refresh needed after a deploy.
+    """
+    if endpoint != 'static':
+        return
+    filename = values.get('filename')
+    if not filename:
+        return
+    try:
+        path = os.path.join(app.static_folder, filename)
+        values['v'] = int(os.stat(path).st_mtime)
+    except OSError:
+        pass
+
+
 def user_event_channel(user_id):
     return f"{REDIS_CHANNEL_PREFIX}:{user_id}"
 
