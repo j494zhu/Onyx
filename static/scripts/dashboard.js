@@ -247,6 +247,14 @@ function setupEventStream() {
     }
   });
 
+  source.addEventListener('todos_updated', (event) => {
+    try {
+      applyTodosUpdate(JSON.parse(event.data));
+    } catch (e) {
+      console.error('Failed to parse todos_updated event', e);
+    }
+  });
+
   source.addEventListener('heartbeat', () => {
     const body = document.body;
     if (body) body.dataset.sseHeartbeatAt = String(Date.now());
@@ -345,20 +353,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAjaxExpenseActions();
   setupEventStream();
   ensureEmptyRowState();
+  setupTodoList();
 
-  const quickInput = document.getElementById('quick_note_area');
   const bookInput = document.getElementById('notebook_area');
 
-  if (quickInput) {
-    quickInput.addEventListener(
-      'input',
-      debounce(function () {
-        if (applyingRemoteNotebook) return;
-        if (this.value === (this.dataset.lastRemoteValue || '')) return;
-        saveNote('quick_note', this.value, 'status-quick');
-      }, 1000)
-    );
-  }
   if (bookInput) {
     bookInput.addEventListener(
       'input',
@@ -373,16 +371,208 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ═══════════════════════════════════════════
+//  4b. TO-DO CHECKLIST
+// ═══════════════════════════════════════════
+
+let todoState = [];
+let applyingRemoteTodos = false;
+
+function makeTodoId() {
+  return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+}
+
+function saveTodos() {
+  if (applyingRemoteTodos) return;
+
+  const statusSpan = document.getElementById('status-quick');
+  if (statusSpan) statusSpan.innerText = 'Saving...';
+
+  fetch('/save_todos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ todos: todoState }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (statusSpan) statusSpan.innerText = 'Saved ' + data.saved_at;
+    })
+    .catch(() => {
+      if (statusSpan) statusSpan.innerText = 'Error!';
+    });
+}
+
+function renderTodos() {
+  const list = document.getElementById('todo-list');
+  const empty = document.getElementById('todo-empty');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  if (!todoState.length) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  todoState.forEach((todo) => {
+    const li = document.createElement('li');
+    li.className = 'todo-item' + (todo.done ? ' is-done' : '');
+    li.dataset.id = todo.id;
+
+    const box = document.createElement('button');
+    box.type = 'button';
+    box.className = 'todo-item__check';
+    box.setAttribute('role', 'checkbox');
+    box.setAttribute('aria-checked', String(!!todo.done));
+    box.innerHTML = todo.done ? '✓' : '';
+    box.addEventListener('click', () => toggleTodo(todo.id));
+
+    const label = document.createElement('span');
+    label.className = 'todo-item__text';
+    label.textContent = todo.text;
+    // Click-to-edit: turn the label into an inline input.
+    label.addEventListener('dblclick', () => editTodo(todo.id, label));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'todo-item__del';
+    del.setAttribute('aria-label', 'Delete task');
+    del.innerHTML = '×';
+    del.addEventListener('click', () => deleteTodo(todo.id));
+
+    li.appendChild(box);
+    li.appendChild(label);
+    li.appendChild(del);
+    list.appendChild(li);
+  });
+}
+
+function toggleTodo(id) {
+  const todo = todoState.find((t) => t.id === id);
+  if (!todo) return;
+  todo.done = !todo.done;
+  renderTodos();
+  saveTodos();
+}
+
+function deleteTodo(id) {
+  todoState = todoState.filter((t) => t.id !== id);
+  renderTodos();
+  saveTodos();
+}
+
+function addTodo(text) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return;
+  todoState.push({ id: makeTodoId(), text: trimmed.slice(0, 500), done: false });
+  renderTodos();
+  saveTodos();
+}
+
+function editTodo(id, labelEl) {
+  const todo = todoState.find((t) => t.id === id);
+  if (!todo) return;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.maxLength = 500;
+  input.className = 'todo-item__edit';
+  input.value = todo.text;
+
+  const commit = () => {
+    const val = input.value.trim();
+    if (val) {
+      todo.text = val.slice(0, 500);
+    }
+    renderTodos();
+    saveTodos();
+  };
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { renderTodos(); }
+  });
+
+  labelEl.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function applyTodosUpdate(payload) {
+  if (!payload || !Array.isArray(payload.todos)) return;
+  applyingRemoteTodos = true;
+  todoState = payload.todos.map((t) => ({
+    id: String(t.id),
+    text: String(t.text || ''),
+    done: !!t.done,
+  }));
+  renderTodos();
+  applyingRemoteTodos = false;
+
+  const statusSpan = document.getElementById('status-quick');
+  if (statusSpan && payload.saved_at) statusSpan.innerText = 'Saved ' + payload.saved_at;
+}
+
+function setupTodoList() {
+  const dataEl = document.getElementById('todos-data');
+  if (dataEl) {
+    try {
+      const parsed = JSON.parse(dataEl.textContent || '[]');
+      if (Array.isArray(parsed)) {
+        todoState = parsed.map((t) => ({
+          id: String(t.id || makeTodoId()),
+          text: String(t.text || ''),
+          done: !!t.done,
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to parse initial todos', e);
+    }
+  }
+
+  renderTodos();
+
+  const form = document.getElementById('todo-add-form');
+  const input = document.getElementById('todo-input');
+  if (form && input) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addTodo(input.value);
+      input.value = '';
+      input.focus();
+    });
+  }
+}
+
+
+// ═══════════════════════════════════════════
 //  5. DATA VISUALIZATION (Chart.js)
 // ═══════════════════════════════════════════
 
-const PALETTE = {
-  coding:   { solid: '#a78bda', light: 'rgba(167,139,218,0.15)' },
-  math:     { solid: '#d4727a', light: 'rgba(212,114,122,0.15)' },
-  break:    { solid: '#c9a94e', light: 'rgba(201,169,78,0.15)' },
-  deepwork: { solid: '#56b6a2', light: 'rgba(86,182,162,0.15)' },
-  other:    { solid: '#6fa8dc', light: 'rgba(111,168,220,0.15)' },
-};
+// Donut palette: an ordered set of muted, harmonious hues tuned for the dark
+// Obsidian theme. Slices are colored strictly by index, so no two slices in a
+// chart ever share a color (categories are only ever 3-6, well under the pool).
+const DONUT_PALETTE = [
+  '#6fa8dc', // soft blue
+  '#a78bda', // lavender
+  '#56b6a2', // teal
+  '#d4727a', // rose
+  '#c9a94e', // gold
+  '#e0976b', // warm peach
+  '#7fbf7b', // sage green
+  '#c98bbf', // mauve
+  '#5fa3b0', // slate cyan
+  '#b3925a', // bronze
+];
+
+// Bar chart uses one standard blue for every bar (per spec).
+const BAR_BLUE_SOLID = '#6fa8dc';
+const BAR_BLUE_LIGHT = 'rgba(111,168,220,0.15)';
+
+function donutColor(index) {
+  return DONUT_PALETTE[index % DONUT_PALETTE.length];
+}
 
 class VizChart {
   constructor(canvas) {
@@ -393,22 +583,16 @@ class VizChart {
     this.data = [];
   }
 
-  _getKey(cat) {
-    return PALETTE[cat.key] ? cat.key : 'other';
-  }
-
   _getColors() {
-    return this.data.map((c) => PALETTE[this._getKey(c)].solid);
+    return this.data.map((_, i) => donutColor(i));
   }
 
   _buildBarGradients() {
-    return this.data.map((cat) => {
-      const p = PALETTE[this._getKey(cat)];
-      const g = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-      g.addColorStop(0, p.solid);
-      g.addColorStop(1, p.light);
-      return g;
-    });
+    // Single standard blue gradient, reused across all bars.
+    const g = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    g.addColorStop(0, BAR_BLUE_SOLID);
+    g.addColorStop(1, BAR_BLUE_LIGHT);
+    return this.data.map(() => g);
   }
 
   _baseDataset() {
@@ -500,14 +684,14 @@ class VizChart {
 function buildLegend(container, categories) {
   container.innerHTML = '';
   const total = categories.reduce((s, c) => s + c.minutes, 0);
-  categories.forEach((cat) => {
+  categories.forEach((cat, i) => {
     const li = document.createElement('li');
     li.className = 'viz-legend__item';
     const pct = total > 0 ? ((cat.minutes / total) * 100).toFixed(0) : 0;
-    const key = PALETTE[cat.key] ? cat.key : 'other';
+    // Legend swatches mirror the donut's per-index colors so the two stay in sync.
     li.innerHTML = `
-      <span class="viz-legend__swatch" style="background:${PALETTE[key].solid}"></span>
-      ${cat.label}
+      <span class="viz-legend__swatch" style="background:${donutColor(i)}"></span>
+      ${escapeHtml(cat.label)}
       <span class="viz-legend__value">${pct}%</span>`;
     container.appendChild(li);
   });
@@ -527,18 +711,34 @@ async function fetchChartData() {
     });
     if (!res.ok) throw new Error('No data');
     const d = await res.json();
-    const cats = d.labels.map((label, i) => {
-      let key = 'other';
-      const l = label.toLowerCase();
-      if (l.includes('code') || l.includes('py') || l.includes('program')) key = 'coding';
-      else if (l.includes('math') || l.includes('alg')) key = 'math';
-      else if (l.includes('break') || l.includes('rest') || l.includes('sleep')) key = 'break';
-      else if (l.includes('deep') || l.includes('focus')) key = 'deepwork';
-      return { key, label, minutes: d.data[i] };
-    });
+    // Colors are assigned by slice index downstream, so we only need label + minutes.
+    const cats = d.labels.map((label, i) => ({ label, minutes: d.data[i] }));
     return { categories: cats, total: d.total_minutes || cats.reduce((a, b) => a + b.minutes, 0) };
   } catch {
     return null;
+  }
+}
+
+// Fetch fresh telemetry and (re)render the chart, legend and total.
+async function loadVizChart(chart, refs) {
+  const { canvas, legend, totalEl, loader, emptyEl } = refs;
+
+  showLoader(loader, true);
+  const result = await fetchChartData();
+  showLoader(loader, false);
+
+  if (result && result.categories.length > 0) {
+    if (canvas) canvas.style.display = '';
+    chart.updateData(result.categories);
+    if (legend) buildLegend(legend, result.categories);
+    if (totalEl) totalEl.textContent = formatDuration(result.total);
+    if (emptyEl) emptyEl.classList.remove('is-visible');
+  } else {
+    // Show elegant empty state
+    if (legend) legend.innerHTML = '';
+    if (emptyEl) emptyEl.classList.add('is-visible');
+    if (totalEl) totalEl.textContent = '—';
+    if (canvas) canvas.style.display = 'none';
   }
 }
 
@@ -550,24 +750,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loader = document.querySelector('.viz-loader');
   const emptyEl = document.getElementById('vizEmpty');
   const toggles = document.querySelectorAll('.viz-toggle__btn');
+  const refreshBtn = document.getElementById('vizRefresh');
 
   if (!canvas) return;
   const chart = new VizChart(canvas);
+  const refs = { canvas, legend, totalEl, loader, emptyEl };
 
-  showLoader(loader, true);
-  const result = await fetchChartData();
-  showLoader(loader, false);
+  await loadVizChart(chart, refs);
 
-  if (result && result.categories.length > 0) {
-    chart.updateData(result.categories);
-    if (legend) buildLegend(legend, result.categories);
-    if (totalEl) totalEl.textContent = formatDuration(result.total);
-    if (emptyEl) emptyEl.classList.remove('is-visible');
-  } else {
-    // Show elegant empty state
-    if (emptyEl) emptyEl.classList.add('is-visible');
-    if (totalEl) totalEl.textContent = '—';
-    if (canvas) canvas.style.display = 'none';
+  // Manual refresh: re-pull telemetry without reloading the page.
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      if (refreshBtn.classList.contains('is-spinning')) return;
+      refreshBtn.classList.add('is-spinning');
+      refreshBtn.disabled = true;
+      try {
+        await loadVizChart(chart, refs);
+      } finally {
+        refreshBtn.classList.remove('is-spinning');
+        refreshBtn.disabled = false;
+      }
+    });
   }
 
   // Toggle buttons

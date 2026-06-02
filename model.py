@@ -16,6 +16,9 @@ class User(UserMixin, db.Model):
     quick_note = db.Column(db.Text, default="")
     notebook = db.Column(db.Text, default="")
 
+    # To-Do checklist stored as a JSON array of {id, text, done}.
+    todos = db.Column(db.Text, default="[]")
+
     streak = db.Column(db.Integer, default=0)
     last_check_in = db.Column(db.String(20), default=None)
 

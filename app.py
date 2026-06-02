@@ -39,12 +39,14 @@ SSE_HEARTBEAT_SECONDS = int(os.environ.get('SSE_HEARTBEAT_SECONDS', '25'))
 EVENT_EXPENSE_CREATED = 'expense_created'
 EVENT_EXPENSE_DELETED = 'expense_deleted'
 EVENT_NOTEBOOK_UPDATED = 'notebook_updated'
+EVENT_TODOS_UPDATED = 'todos_updated'
 EVENT_HEARTBEAT = 'heartbeat'
 
 EVENT_PAYLOAD_SCHEMA = {
     EVENT_EXPENSE_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
     EVENT_EXPENSE_DELETED: ('id',),
     EVENT_NOTEBOOK_UPDATED: ('type', 'content', 'saved_at'),
+    EVENT_TODOS_UPDATED: ('todos', 'saved_at'),
 }
 
 SSE_EVENT_NAMES = set(EVENT_PAYLOAD_SCHEMA.keys())
@@ -123,6 +125,93 @@ def publish_user_event(user_id, event_name, payload):
 def format_sse(event_name, data):
     return f"event: {event_name}\ndata: {json.dumps(data)}\n\n"
 
+
+# --- Helpers: To-Do checklist ---
+import re as _re
+
+
+def load_todos(user):
+    """Return the user's todos as a sanitized list of {id, text, done}."""
+    raw = user.todos or "[]"
+    try:
+        items = json.loads(raw)
+    except (ValueError, TypeError):
+        items = []
+
+    clean = []
+    if isinstance(items, list):
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            text_val = str(it.get('text', '')).strip()
+            if not text_val:
+                continue
+            clean.append({
+                'id': str(it.get('id') or len(clean) + 1),
+                'text': text_val[:500],
+                'done': bool(it.get('done', False)),
+            })
+    return clean
+
+
+def sanitize_todos(items):
+    """Validate an incoming todos payload from the client."""
+    clean = []
+    if not isinstance(items, list):
+        return clean
+    for it in items[:200]:  # hard cap to avoid abuse
+        if not isinstance(it, dict):
+            continue
+        text_val = str(it.get('text', '')).strip()
+        if not text_val:
+            continue
+        clean.append({
+            'id': str(it.get('id') or len(clean) + 1),
+            'text': text_val[:500],
+            'done': bool(it.get('done', False)),
+        })
+    return clean
+
+
+def migrate_quick_note_to_todos(quick_note):
+    """One-time conversion of legacy free-text quick_note into todo items.
+
+    Numbered/bulleted lines start a new item; non-marker lines are treated as
+    continuation of the previous item (handles wrapped multi-line entries).
+    """
+    if not quick_note:
+        return []
+
+    marker = _re.compile(r'^\s*(?:\d+[.、)]|[-*•])\s+')
+    items = []
+    for line in quick_note.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if marker.match(line) or not items:
+            text_val = marker.sub('', stripped).strip()
+            if text_val:
+                items.append(text_val)
+        else:
+            # Continuation of the previous wrapped line.
+            items[-1] = (items[-1] + ' ' + stripped).strip()
+
+    return [
+        {'id': str(i + 1), 'text': t[:500], 'done': False}
+        for i, t in enumerate(items) if t
+    ]
+
+
+def todos_to_text(todos):
+    """Render todos as a plain-text checklist for the AI audit prompt."""
+    if not todos:
+        return ""
+    lines = []
+    for t in todos:
+        mark = '[x]' if t.get('done') else '[ ]'
+        lines.append(f"{mark} {t.get('text', '')}")
+    return "\n".join(lines)
+
 # --- Helper: calculate logical date ---
 def get_logical_date(dt_obj):
     """
@@ -137,6 +226,33 @@ def get_logical_date(dt_obj):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+def ensure_user_columns():
+    """Idempotently add columns introduced after the table was first created.
+
+    db.create_all() never ALTERs existing tables, so a freshly-added column
+    (e.g. User.todos) must be patched in by hand for already-provisioned DBs.
+    """
+    engine = db.engine
+    # Probe the live schema for the column; add it only if missing.
+    try:
+        inspector = db.inspect(engine)
+        existing_cols = {col['name'] for col in inspector.get_columns('user')}
+    except Exception as exc:
+        app.logger.warning('Schema inspection failed: %s', exc)
+        return
+
+    if 'todos' not in existing_cols:
+        # Postgres and SQLite both accept this minimal ADD COLUMN form.
+        # Multiple gunicorn workers boot concurrently and each runs this, so the
+        # ALTER can race: tolerate a "column already exists" loser and move on.
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE \"user\" ADD COLUMN todos TEXT DEFAULT '[]'"))
+            app.logger.info('Added missing column user.todos')
+        except Exception as exc:
+            app.logger.info('Skipped adding user.todos (likely a concurrent worker won the race): %s', exc)
+
+
 def initialize_database():
     with app.app_context():
         engine = db.engine
@@ -150,6 +266,7 @@ def initialize_database():
                     conn.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
         else:
             db.create_all()
+        ensure_user_columns()
 
 
 initialize_database()
@@ -228,8 +345,25 @@ def index(): # get user lgo entry;
         # [NEW] Add a simple fake model confidence metric.
         # Logic: more samples -> higher confidence. Start at 75% and add over time.
         model_confidence = min(99, 75 + int(rlhf_count / 5))
-            
-        return render_template('index.html', expenses=expenses, total_hours=total_h, deep_hours=deep_h, rlhf_count=rlhf_count, model_confidence=model_confidence)
+
+        # To-Do checklist: load structured todos, migrating legacy quick_note text once.
+        todos = load_todos(current_user)
+        if not todos and (current_user.quick_note or '').strip():
+            todos = migrate_quick_note_to_todos(current_user.quick_note)
+            current_user.todos = json.dumps(todos)
+            current_user.quick_note = ""  # Migrated; free-text field retired for To-Do.
+            db.session.commit()
+
+        return render_template(
+            'index.html',
+            expenses=expenses,
+            total_hours=total_h,
+            deep_hours=deep_h,
+            rlhf_count=rlhf_count,
+            model_confidence=model_confidence,
+            todos=todos,
+            todos_json=json.dumps(todos),
+        )
 
 @app.route('/end_day', methods=['POST'])
 @login_required
@@ -244,8 +378,9 @@ def end_day():
         # For manual end-day, use current logical date as archive date.
         item.archive_date = current_logical_date
 
-    # empty quick_note
+    # empty quick_note + To-Do checklist (the To-Do list is daily-cleared)
     current_user.quick_note = ""
+    current_user.todos = "[]"
     # and do NOT change notebook
         
     db.session.commit()
@@ -447,6 +582,24 @@ def save_notes():
     return jsonify({"status": "success", "saved_at": saved_at})
 
 
+@app.route('/save_todos', methods=['POST'])
+@login_required
+def save_todos():
+    """Persist the full To-Do checklist (array of {id, text, done})."""
+    data = request.json or {}
+    todos = sanitize_todos(data.get('todos', []))
+
+    current_user.todos = json.dumps(todos)
+    db.session.commit()
+
+    saved_at = datetime.now().strftime("%H:%M:%S")
+    publish_user_event(current_user.id, EVENT_TODOS_UPDATED, {
+        'todos': todos,
+        'saved_at': saved_at,
+    })
+    return jsonify({"status": "success", "saved_at": saved_at, "todos": todos})
+
+
 @app.route('/api/events', methods=['GET'])
 @login_required
 def stream_events():
@@ -543,7 +696,9 @@ def ai_audit():
     logs_data = [f"{log.start_time}-{log.end_time}: {log.desc}" for log in today_logs]
     
     notebook = current_user.notebook
-    quick_note = current_user.quick_note
+    # The To-Do list now lives in the structured `todos` field; render it as
+    # a plain-text checklist so the audit prompt keeps the same context.
+    quick_note = todos_to_text(load_todos(current_user))
 
     # Build prompt text
     prompt_text = get_audit_prompt(notebook, quick_note, logs_data, tone=user_tone, current_time=client_time)

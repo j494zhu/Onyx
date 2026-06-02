@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onyx — Neural Engine</title>
 
+  <!-- Theme pre-paint: decide light/dark BEFORE first paint to avoid a flash.
+       Explicit user choice (localStorage) wins; otherwise follow the OS theme. -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('onyx-dark-mode');
+        var prefersDark = window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = stored === '1' || (stored === null && prefersDark);
+        if (dark) document.documentElement.classList.add('dark-mode');
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- Fonts -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 
@@ -18,10 +32,39 @@
     <h2 class="dash-title">{{ current_user.username }}'s Log</h2>
     <nav class="dash-nav">
       <!-- Dark Mode Toggle -->
-      <div class="dm-toggle" id="dm-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">
-        <span class="dm-toggle__icon dm-toggle__icon--sun">☀</span>
-        <span class="dm-toggle__icon dm-toggle__icon--moon">☽</span>
-        <span class="dm-toggle__slider" id="dm-slider"></span>
+      <div class="dm-toggle" id="dm-toggle" onclick="toggleDarkMode()" role="button" tabindex="0" aria-label="Toggle dark mode" title="Toggle theme">
+        <!-- Faint hint of the *other* mode on the far edge -->
+        <span class="dm-toggle__hint dm-toggle__hint--sun" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4.5"/>
+            <line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/>
+            <line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/>
+            <line x1="4.4" y1="4.4" x2="6.2" y2="6.2"/><line x1="17.8" y1="17.8" x2="19.6" y2="19.6"/>
+            <line x1="4.4" y1="19.6" x2="6.2" y2="17.8"/><line x1="17.8" y1="6.2" x2="19.6" y2="4.4"/>
+          </svg>
+        </span>
+        <span class="dm-toggle__hint dm-toggle__hint--moon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>
+          </svg>
+        </span>
+        <!-- Sliding knob carries the active icon -->
+        <span class="dm-toggle__slider" id="dm-slider">
+          <span class="dm-toggle__face dm-toggle__face--sun" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.5"/>
+              <line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/>
+              <line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/>
+              <line x1="4.4" y1="4.4" x2="6.2" y2="6.2"/><line x1="17.8" y1="17.8" x2="19.6" y2="19.6"/>
+              <line x1="4.4" y1="19.6" x2="6.2" y2="17.8"/><line x1="17.8" y1="6.2" x2="19.6" y2="4.4"/>
+            </svg>
+          </span>
+          <span class="dm-toggle__face dm-toggle__face--moon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>
+            </svg>
+          </span>
+        </span>
       </div>
       <span class="nav-divider">|</span>
       <a href="/history" class="nav-link nav-link--gold">View History</a>
@@ -116,16 +159,30 @@
       </form>
     </section>
 
-    <!-- ─── QUICK NOTES (To-Do) ─── -->
+    <!-- ─── TO-DO LIST (Checklist) ─── -->
     <section class="widget widget-todo">
       <header class="widget__header">
         <h3 class="widget__title"># To-Do List</h3>
         <span id="status-quick" class="widget__badge">Daily Cleared</span>
       </header>
-      <textarea
-        id="quick_note_area"
-        class="note-textarea"
-        placeholder="Capture fleeting thoughts...">{{ current_user.quick_note }}</textarea>
+
+      <ul id="todo-list" class="todo-list" aria-label="To-Do checklist"></ul>
+
+      <div id="todo-empty" class="todo-empty">— No Tasks Yet —</div>
+
+      <form id="todo-add-form" class="todo-add" autocomplete="off">
+        <span class="todo-add__plus">+</span>
+        <input
+          id="todo-input"
+          class="todo-add__input"
+          type="text"
+          maxlength="500"
+          placeholder="Add a task..."
+          aria-label="Add a task">
+      </form>
+
+      <!-- Initial checklist state injected by the server -->
+      <script id="todos-data" type="application/json">{{ todos_json | safe }}</script>
     </section>
 
     <!-- ─── NOTEBOOK ─── -->
@@ -144,9 +201,17 @@
     <section class="widget widget-dataviz">
       <header class="viz-header">
         <h3 class="viz-title">Data Visualization</h3>
-        <div class="viz-toggle" role="tablist">
-          <button class="viz-toggle__btn is-active" role="tab" aria-selected="true" data-chart="doughnut">Donut</button>
-          <button class="viz-toggle__btn" role="tab" aria-selected="false" data-chart="bar">Bar</button>
+        <div class="viz-controls">
+          <div class="viz-toggle" role="tablist">
+            <button class="viz-toggle__btn is-active" role="tab" aria-selected="true" data-chart="doughnut">Donut</button>
+            <button class="viz-toggle__btn" role="tab" aria-selected="false" data-chart="bar">Bar</button>
+          </div>
+          <button id="vizRefresh" class="viz-refresh" type="button" title="Refresh chart" aria-label="Refresh chart">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+              <polyline points="21 3 21 9 15 9"></polyline>
+            </svg>
+          </button>
         </div>
       </header>
 

@@ -632,6 +632,152 @@ body {
 }
 
 
+/* ─── To-Do Checklist ─────────────────────────────────────────── */
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo-empty {
+  display: none;
+  padding: 14px 2px;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--text-ghost);
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.todo-item:hover {
+  background: var(--surface-card);
+}
+
+.todo-item__check {
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--surface-deep);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+}
+
+.todo-item__check:hover {
+  border-color: var(--accent-teal);
+}
+
+.todo-item.is-done .todo-item__check {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: var(--surface-deep);
+  font-weight: 700;
+}
+
+.todo-item__text {
+  flex: 1;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  word-break: break-word;
+  cursor: text;
+}
+
+.todo-item.is-done .todo-item__text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-ghost);
+}
+
+.todo-item__edit {
+  flex: 1;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  outline: none;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.todo-item__del {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-ghost);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--duration-fast) var(--ease);
+}
+
+.todo-item:hover .todo-item__del {
+  opacity: 1;
+}
+
+.todo-item__del:hover {
+  color: var(--accent-rose);
+}
+
+.todo-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.todo-add__plus {
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.todo-add__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.todo-add__input::placeholder {
+  color: var(--text-ghost);
+}
+
+
 /* ═══════════════════════════════════════════════════════════════
    WIDGET: DATA VISUALIZATION
    ═══════════════════════════════════════════════════════════════ */
@@ -657,6 +803,13 @@ body {
   color: var(--text-muted);
 }
 
+/* Controls cluster: toggle + refresh, anchored to the header's right edge */
+.viz-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Segmented Toggle */
 .viz-toggle {
   display: flex;
@@ -665,6 +818,46 @@ body {
   padding: 3px;
   gap: 2px;
   border: 1px solid var(--border-subtle);
+}
+
+/* Refresh button — sits just right of the Donut/Bar toggle */
+.viz-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease),
+              border-color var(--duration-fast) var(--ease),
+              background var(--duration-fast) var(--ease);
+}
+
+.viz-refresh:hover {
+  color: var(--accent-blue);
+  border-color: var(--border-default);
+  background: var(--surface-hover);
+}
+
+.viz-refresh:disabled {
+  cursor: default;
+}
+
+.viz-refresh svg {
+  display: block;
+}
+
+.viz-refresh.is-spinning svg {
+  animation: viz-refresh-spin 0.7s linear infinite;
+}
+
+@keyframes viz-refresh-spin {
+  to { transform: rotate(360deg); }
 }
 
 .viz-toggle__btn {
@@ -1644,74 +1837,100 @@ body {
   transition: background var(--duration) var(--ease),
               border-color var(--duration) var(--ease);
   flex-shrink: 0;
+  outline: none;
 }
 
 .dm-toggle:hover {
   border-color: var(--border-strong);
 }
 
-/* Icons on each side */
-.dm-toggle__icon {
+.dm-toggle:focus-visible {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(111, 168, 220, 0.3);
+}
+
+/* Faint hint of the alternate mode, sitting on the far edge */
+.dm-toggle__hint {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 12px;
-  line-height: 1;
+  display: flex;
+  line-height: 0;
   pointer-events: none;
   z-index: 1;
-  transition: opacity var(--duration-fast);
+  opacity: 0.4;
+  transition: opacity var(--duration-fast) var(--ease);
 }
+.dm-toggle__hint svg { display: block; }
 
-.dm-toggle__icon--sun {
-  left: 6px;
-  color: #fbbf24;
-}
+.dm-toggle__hint--sun  { left: 7px;  color: #f5b73d; }
+.dm-toggle__hint--moon { right: 7px; color: #aab6c6; }
 
-.dm-toggle__icon--moon {
-  right: 6px;
-  color: #94a3b8;
-}
+/* Light: knob on the left over the sun, so hint the moon on the right.
+   Dark:  knob on the right over the moon, so hint the sun on the left. */
+.dm-toggle:not(.is-dark) .dm-toggle__hint--sun  { opacity: 0; }
+.dm-toggle:not(.is-dark) .dm-toggle__hint--moon { opacity: 0.45; }
+.dm-toggle.is-dark .dm-toggle__hint--moon { opacity: 0; }
+.dm-toggle.is-dark .dm-toggle__hint--sun  { opacity: 0.45; }
 
-/* Sliding thumb */
+/* Sliding knob */
 .dm-toggle__slider {
   position: absolute;
   top: 3px;
   left: 3px;
   width: 20px;
   height: 20px;
-  background: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
+  background: linear-gradient(145deg, #ffffff, #dfe6ef);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  z-index: 2;
   transition: transform var(--duration) var(--ease),
               background var(--duration) var(--ease);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Active state: slider moves to moon side */
 .dm-toggle.is-dark .dm-toggle__slider {
   transform: translateX(30px);
-  background: #94a3b8;
+  background: linear-gradient(145deg, #e7edf5, #c6d0dc);
 }
 
-/* Active state: highlight current icon */
-.dm-toggle.is-dark .dm-toggle__icon--moon {
-  opacity: 1;
+/* The active icon rides inside the knob; the two crossfade on toggle */
+.dm-toggle__face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease),
+              transform var(--duration-fast) var(--ease);
 }
-.dm-toggle.is-dark .dm-toggle__icon--sun {
-  opacity: 0.35;
-}
-.dm-toggle:not(.is-dark) .dm-toggle__icon--sun {
-  opacity: 1;
-}
-.dm-toggle:not(.is-dark) .dm-toggle__icon--moon {
-  opacity: 0.35;
-}
+.dm-toggle__face svg { display: block; }
+
+.dm-toggle__face--sun  { color: #f59e0b; }
+.dm-toggle__face--moon { color: #334155; }
+
+/* Light mode shows the sun face; dark mode shows the moon face */
+.dm-toggle:not(.is-dark) .dm-toggle__face--moon { opacity: 0; transform: rotate(-45deg) scale(0.6); }
+.dm-toggle:not(.is-dark) .dm-toggle__face--sun  { opacity: 1; transform: rotate(0) scale(1); }
+.dm-toggle.is-dark .dm-toggle__face--sun  { opacity: 0; transform: rotate(45deg) scale(0.6); }
+.dm-toggle.is-dark .dm-toggle__face--moon { opacity: 1; transform: rotate(0) scale(1); }
 
 
 /* ═══════════════════════════════════════════════════════════════
-   DARK MODE BODY OVERRIDE
+   DARK MODE OVERRIDE
+   The class is set on <html> by a pre-paint script so the dark
+   background is applied on the very first paint (no white flash).
    ═══════════════════════════════════════════════════════════════ */
 
-body.dark-mode {
+html.dark-mode {
+  background-color: #000000;
+}
+
+html.dark-mode body {
   background-image: none !important;
   background-color: #000000 !important;
 }
