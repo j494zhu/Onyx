@@ -277,15 +277,20 @@
       <button id="audit-btn" class="btn-audit" onclick="runNeuralAudit()">Initialize Scan</button>
 
       <div id="rlhf-zone" class="rlhf-zone">
-        <div class="rlhf-scale" id="rlhf-scale">
-          <span class="rlhf-scale__end">dislike</span>
-          <button onclick="submitRLHF(1)" class="rlhf-dot" aria-label="dislike"></button>
-          <button onclick="submitRLHF(2)" class="rlhf-dot"></button>
-          <button onclick="submitRLHF(4)" class="rlhf-dot"></button>
-          <button onclick="submitRLHF(5)" class="rlhf-dot" aria-label="like"></button>
-          <span class="rlhf-scale__end">like</span>
+        <!-- Fixed-height slot: scale and the confirmation message are stacked
+             (absolutely positioned) so they share the same spot and toggling
+             them never shifts the text above. -->
+        <div class="rlhf-slot">
+          <div class="rlhf-scale" id="rlhf-scale">
+            <span class="rlhf-scale__end">dislike</span>
+            <button onclick="submitRLHF(1)" class="rlhf-dot" aria-label="dislike"></button>
+            <button onclick="submitRLHF(2)" class="rlhf-dot"></button>
+            <button onclick="submitRLHF(4)" class="rlhf-dot"></button>
+            <button onclick="submitRLHF(5)" class="rlhf-dot" aria-label="like"></button>
+            <span class="rlhf-scale__end">like</span>
+          </div>
+          <span id="rlhf-updated-msg" class="rlhf-updated">[ DATASET UPDATED ]</span>
         </div>
-        <span id="rlhf-updated-msg" class="rlhf-updated" hidden>[ DATASET UPDATED ]</span>
       </div>
     </section>
 

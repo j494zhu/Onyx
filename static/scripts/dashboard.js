@@ -881,15 +881,13 @@ async function runNeuralAudit() {
     };
 
     if (rlhfZone) {
-      // Reset feedback state (in case a previous scan left the success message showing)
+      // Reset feedback state so the new scan can be rated once.
+      rlhfLocked = false;
+      rlhfZone.classList.remove('is-submitted', 'is-cleared');
       const scale = document.getElementById('rlhf-scale');
-      const msg = document.getElementById('rlhf-updated-msg');
       if (scale) {
-        scale.hidden = false;
-        scale.style.pointerEvents = '';
         scale.querySelectorAll('.rlhf-dot').forEach((d) => d.classList.remove('is-selected'));
       }
-      if (msg) { msg.hidden = true; msg.classList.remove('is-visible'); }
 
       rlhfZone.style.display = 'block';
       rlhfZone.style.opacity = '0';
@@ -908,17 +906,20 @@ async function runNeuralAudit() {
   }
 }
 
-// RLHF feedback for Neural Audit
+// RLHF feedback for Neural Audit — one vote per scan.
+let rlhfLocked = false;
+
 async function submitRLHF(score) {
-  if (!currentAuditSession) return;
+  if (!currentAuditSession || rlhfLocked) return; // ignore repeat clicks
+  rlhfLocked = true;
+
+  const zone = document.getElementById('rlhf-zone');
   const scale = document.getElementById('rlhf-scale');
-  const msg = document.getElementById('rlhf-updated-msg');
 
   // Highlight the chosen dot (scores map 1,2,4,5 -> dots 0..3)
   const scoreToIndex = { 1: 0, 2: 1, 4: 2, 5: 3 };
   const dots = scale.querySelectorAll('.rlhf-dot');
   dots.forEach((d, i) => d.classList.toggle('is-selected', i === scoreToIndex[score]));
-  scale.style.pointerEvents = 'none';
 
   try {
     const res = await fetch('/api/submit_alignment', {
@@ -931,22 +932,18 @@ async function submitRLHF(score) {
       }),
     });
     if (res.ok) {
-      scale.hidden = true;
-      msg.hidden = false;
-      requestAnimationFrame(() => msg.classList.add('is-visible'));
-      setTimeout(() => {
-        msg.classList.remove('is-visible');
-        msg.hidden = true;
-        scale.hidden = false;
-        scale.style.pointerEvents = '';
-        dots.forEach((d) => d.classList.remove('is-selected'));
-      }, 3000);
+      // Swap dots -> "[ DATASET UPDATED ]" in the same spot; the dots are gone
+      // for good (no re-submission). After 3s the message fades out too.
+      zone.classList.add('is-submitted');
+      setTimeout(() => zone.classList.add('is-cleared'), 3000);
     } else {
-      scale.style.pointerEvents = '';
+      rlhfLocked = false; // let the user retry on failure
+      dots.forEach((d) => d.classList.remove('is-selected'));
     }
   } catch (e) {
     console.error(e);
-    scale.style.pointerEvents = '';
+    rlhfLocked = false;
+    dots.forEach((d) => d.classList.remove('is-selected'));
   }
 }
 

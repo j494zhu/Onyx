@@ -1284,11 +1284,28 @@ body {
   margin-bottom: 8px;
 }
 
+/* Fixed-height slot keeps the panel from reflowing as the scale/message
+   appear and disappear — both children are absolutely centered inside it. */
+.rlhf-slot {
+  position: relative;
+  height: 22px;
+}
+
 .rlhf-scale {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  opacity: 1;
+  transition: opacity 0.3s var(--ease);
+}
+
+/* After a vote, the dots fade out and become unclickable (one-shot). */
+.rlhf-zone.is-submitted .rlhf-scale {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .rlhf-scale__end {
@@ -1319,16 +1336,23 @@ body {
 }
 
 .rlhf-updated {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--neon-green);
   font-size: 0.78rem;
   letter-spacing: 1px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.3s var(--ease);
 }
 
-.rlhf-updated.is-visible {
-  opacity: 1;
-}
+/* Submitted: message shows in the same spot the dots occupied.
+   Cleared: message fades out too, leaving the slot empty (height preserved). */
+.rlhf-zone.is-submitted .rlhf-updated { opacity: 1; }
+.rlhf-zone.is-cleared   .rlhf-updated { opacity: 0; }
 
 
 /* ═══════════════════════════════════════════════════════════════
