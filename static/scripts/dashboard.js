@@ -98,6 +98,28 @@ function buildExpenseRow(expense) {
   return tr;
 }
 
+// Refresh the live "Total Tracked" footer and Data Matrix cells from a
+// lightweight endpoint (no LLM). The chart itself is NOT refreshed here — that
+// stays manual/page-load only, since it hits a paid categorization API.
+async function refreshTrackedStats() {
+  try {
+    const res = await fetch('/api/stats', { headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    const d = await res.json();
+
+    const totalEl = document.getElementById('vizTotal');
+    if (totalEl) totalEl.textContent = formatDuration(d.total_minutes || 0);
+
+    const loggedEl = document.getElementById('matrixLogged');
+    if (loggedEl) loggedEl.textContent = d.total_hours;
+
+    const deepEl = document.getElementById('matrixDeep');
+    if (deepEl) deepEl.textContent = d.deep_hours;
+  } catch (e) {
+    // Non-fatal: leave existing values in place if the refresh fails.
+  }
+}
+
 function appendExpenseRow(expense) {
   if (!expense || !expense.id) return;
   const tbody = getHistoryBody();
@@ -110,6 +132,7 @@ function appendExpenseRow(expense) {
   const row = buildExpenseRow(expense);
   tbody.prepend(row);
   reindexExpenseRows();
+  refreshTrackedStats();
 }
 
 function removeExpenseRowById(expenseId) {
@@ -121,6 +144,7 @@ function removeExpenseRowById(expenseId) {
 
   reindexExpenseRows();
   ensureEmptyRowState();
+  if (row) refreshTrackedStats();
 }
 
 async function postFormJson(action, formData) {
@@ -857,6 +881,16 @@ async function runNeuralAudit() {
     };
 
     if (rlhfZone) {
+      // Reset feedback state (in case a previous scan left the success message showing)
+      const scale = document.getElementById('rlhf-scale');
+      const msg = document.getElementById('rlhf-updated-msg');
+      if (scale) {
+        scale.hidden = false;
+        scale.style.pointerEvents = '';
+        scale.querySelectorAll('.rlhf-dot').forEach((d) => d.classList.remove('is-selected'));
+      }
+      if (msg) { msg.hidden = true; msg.classList.remove('is-visible'); }
+
       rlhfZone.style.display = 'block';
       rlhfZone.style.opacity = '0';
       setTimeout(() => (rlhfZone.style.opacity = '1'), 400);
@@ -877,9 +911,14 @@ async function runNeuralAudit() {
 // RLHF feedback for Neural Audit
 async function submitRLHF(score) {
   if (!currentAuditSession) return;
-  const zone = document.getElementById('rlhf-zone');
-  zone.style.opacity = '0.5';
-  zone.style.pointerEvents = 'none';
+  const scale = document.getElementById('rlhf-scale');
+  const msg = document.getElementById('rlhf-updated-msg');
+
+  // Highlight the chosen dot (scores map 1,2,4,5 -> dots 0..3)
+  const scoreToIndex = { 1: 0, 2: 1, 4: 2, 5: 3 };
+  const dots = scale.querySelectorAll('.rlhf-dot');
+  dots.forEach((d, i) => d.classList.toggle('is-selected', i === scoreToIndex[score]));
+  scale.style.pointerEvents = 'none';
 
   try {
     const res = await fetch('/api/submit_alignment', {
@@ -892,11 +931,22 @@ async function submitRLHF(score) {
       }),
     });
     if (res.ok) {
-      zone.innerHTML = '<span style="color:var(--neon-green);font-size:0.78rem;letter-spacing:1px;">[ DATASET UPDATED ]</span>';
-      zone.style.opacity = '1';
+      scale.hidden = true;
+      msg.hidden = false;
+      requestAnimationFrame(() => msg.classList.add('is-visible'));
+      setTimeout(() => {
+        msg.classList.remove('is-visible');
+        msg.hidden = true;
+        scale.hidden = false;
+        scale.style.pointerEvents = '';
+        dots.forEach((d) => d.classList.remove('is-selected'));
+      }, 3000);
+    } else {
+      scale.style.pointerEvents = '';
     }
   } catch (e) {
     console.error(e);
+    scale.style.pointerEvents = '';
   }
 }
 

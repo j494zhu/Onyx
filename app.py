@@ -792,7 +792,7 @@ def visualize_data():
     
     if not active_items:
         return jsonify({
-            "labels": ["暂无数据"],
+            "labels": ["No Data Yet"],
             "data": [0],
             "total_minutes": 0,
             "message": "No data to analyze"
@@ -891,6 +891,25 @@ def visualize_data():
         "data": list(stats.values()),
         "total_minutes": sum(stats.values())
     })
+
+
+@app.route('/api/stats', methods=['GET'])
+@login_required
+def get_stats():
+    """Lightweight tracked-time stats (no LLM). Powers the live Total Tracked
+    footer and Data Matrix cells so they refresh when a session is logged,
+    without triggering the expensive /api/visualize categorization."""
+    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+    total_h, deep_h = calculate_stats_from_logs(active_items)
+    # Compute exact minutes the same way /api/visualize does, so Total Tracked
+    # stays consistent whether refreshed here or by a chart reload.
+    total_minutes = sum(calculate_duration(item.start_time, item.end_time) for item in active_items)
+    return jsonify({
+        "total_minutes": total_minutes,
+        "total_hours": total_h,
+        "deep_hours": deep_h,
+    })
+
 
 @app.route('/api/submit_alignment', methods=['POST'])
 @login_required

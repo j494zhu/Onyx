@@ -1284,24 +1284,50 @@ body {
   margin-bottom: 8px;
 }
 
-.rlhf-zone__buttons {
+.rlhf-scale {
   display: flex;
-  gap: 14px;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
 }
 
-.rlhf-btn {
-  font-size: 1.2rem;
+.rlhf-scale__end {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.rlhf-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+  background: transparent;
   cursor: pointer;
-  background: none;
-  border: none;
-  transition: transform 0.2s var(--ease);
-  padding: 4px;
-  width: auto;
+  transition: transform 0.2s var(--ease), background 0.2s var(--ease),
+    border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
-.rlhf-btn:hover {
-  transform: scale(1.25);
+.rlhf-dot:hover,
+.rlhf-dot.is-selected {
+  background: var(--neon-green);
+  border-color: var(--neon-green);
+  box-shadow: 0 0 8px var(--neon-green);
+  transform: scale(1.2);
+}
+
+.rlhf-updated {
+  color: var(--neon-green);
+  font-size: 0.78rem;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+}
+
+.rlhf-updated.is-visible {
+  opacity: 1;
 }
 
 

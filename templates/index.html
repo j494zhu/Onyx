@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Onyx — Neural Engine</title>
+  <title>Onyx</title>
 
   <!-- Theme pre-paint: decide light/dark BEFORE first paint to avoid a flash.
        Explicit user choice (localStorage) wins; otherwise follow the OS theme. -->
@@ -277,12 +277,15 @@
       <button id="audit-btn" class="btn-audit" onclick="runNeuralAudit()">Initialize Scan</button>
 
       <div id="rlhf-zone" class="rlhf-zone">
-        <p class="rlhf-zone__label">Train Neural Twin</p>
-        <div class="rlhf-zone__buttons">
-          <button onclick="submitRLHF(1)" class="rlhf-btn">😫</button>
-          <button onclick="submitRLHF(3)" class="rlhf-btn">😐</button>
-          <button onclick="submitRLHF(5)" class="rlhf-btn">🤩</button>
+        <div class="rlhf-scale" id="rlhf-scale">
+          <span class="rlhf-scale__end">dislike</span>
+          <button onclick="submitRLHF(1)" class="rlhf-dot" aria-label="dislike"></button>
+          <button onclick="submitRLHF(2)" class="rlhf-dot"></button>
+          <button onclick="submitRLHF(4)" class="rlhf-dot"></button>
+          <button onclick="submitRLHF(5)" class="rlhf-dot" aria-label="like"></button>
+          <span class="rlhf-scale__end">like</span>
         </div>
+        <span id="rlhf-updated-msg" class="rlhf-updated" hidden>[ DATASET UPDATED ]</span>
       </div>
     </section>
 
@@ -294,11 +297,11 @@
       <div class="matrix-grid">
         <div class="matrix-cell">
           <span class="matrix-cell__label">Logged</span>
-          <span class="matrix-cell__value">{{ total_hours | default('0') }}</span>
+          <span class="matrix-cell__value" id="matrixLogged">{{ total_hours | default('0') }}</span>
         </div>
         <div class="matrix-cell">
           <span class="matrix-cell__label">Deep Work</span>
-          <span class="matrix-cell__value matrix-cell__value--teal">{{ deep_hours | default('0') }}</span>
+          <span class="matrix-cell__value matrix-cell__value--teal" id="matrixDeep">{{ deep_hours | default('0') }}</span>
         </div>
         <div class="matrix-cell">
           <span class="matrix-cell__label">Streak</span>
