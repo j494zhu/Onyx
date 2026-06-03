@@ -1072,16 +1072,124 @@ async function submitInsightFeedback(score) {
 //  8. POMODORO TIMER
 // ═══════════════════════════════════════════
 
+/* ── Pomodoro (backend-synced) ──────────────────────────────────────────── */
+
 const WORK_TIME = 25 * 60;
 const SHORT_BREAK = 3 * 60;
 const LONG_BREAK = 15 * 60;
 const CYCLES_BEFORE_LONG = 4;
+const AUTOSAVE_INTERVAL_MS = 15000;
+
+const PHASE_DURATIONS = { WORK: WORK_TIME, SHORT: SHORT_BREAK, LONG: LONG_BREAK };
 
 let pomoTimer = null;
 let pomoLeft = WORK_TIME;
 let isPomoRunning = false;
 let currentPhase = 'WORK';
 let cycleCount = 0;
+let autosaveHandle = null;
+
+const _phaseDuration = (p) => PHASE_DURATIONS[p] || WORK_TIME;
+
+const _pomoSnapshot = () => ({
+  remaining_seconds: pomoLeft,
+  phase: currentPhase,
+  cycle_count: cycleCount,
+  running: isPomoRunning,
+});
+
+const _saveToBackend = () => {
+  const blob = new Blob([JSON.stringify(_pomoSnapshot())], { type: 'application/json' });
+  navigator.sendBeacon('/api/pomodoro/save', blob);
+};
+
+const _startAutosave = () => {
+  _stopAutosave();
+  autosaveHandle = setInterval(() => {
+    if (isPomoRunning) _saveToBackend();
+  }, AUTOSAVE_INTERVAL_MS);
+};
+
+const _stopAutosave = () => {
+  if (autosaveHandle) { clearInterval(autosaveHandle); autosaveHandle = null; }
+};
+
+const _advancePhase = (overflowSeconds) => {
+  let remaining = overflowSeconds;
+  while (remaining >= 0) {
+    if (currentPhase === 'WORK') {
+      cycleCount++;
+      if (cycleCount >= CYCLES_BEFORE_LONG) {
+        currentPhase = 'LONG';
+        cycleCount = 0;
+      } else {
+        currentPhase = 'SHORT';
+      }
+    } else {
+      currentPhase = 'WORK';
+    }
+    const dur = _phaseDuration(currentPhase);
+    if (remaining < dur) { pomoLeft = dur - remaining; return; }
+    remaining -= dur;
+  }
+  pomoLeft = _phaseDuration(currentPhase);
+};
+
+const _updateStatusText = () => {
+  const el = document.getElementById('pomo-status-text');
+  if (!el) return;
+  if (currentPhase === 'WORK') {
+    el.innerText = '>>> READY TO FOCUS <<<';
+    el.style.color = '#ccc';
+  } else if (currentPhase === 'SHORT') {
+    el.innerText = '>>> STANDBY MODE (SHORT BREAK) <<<';
+    el.style.color = '#2ecc71';
+  } else {
+    el.innerText = '>>> SYSTEM COOLING (LONG BREAK) <<<';
+    el.style.color = '#3498db';
+  }
+};
+
+const _updatePomoButtonToPaused = () => {
+  const btn = document.getElementById('pomo-btn');
+  if (!btn) return;
+  btn.innerText = (pomoLeft === _phaseDuration(currentPhase) && cycleCount === 0 && currentPhase === 'WORK')
+    ? 'INITIALIZE SEQUENCE' : 'RESUME';
+  btn.style.background = 'transparent';
+  btn.style.borderColor = 'rgba(255,255,255,0.2)';
+};
+
+const loadPomodoroState = () => {
+  fetch('/api/pomodoro/load')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.state) return;
+      const s = data.state;
+      pomoLeft = s.remaining_seconds;
+      currentPhase = s.phase;
+      cycleCount = s.cycle_count;
+      isPomoRunning = false;
+
+      if (s.running && s.paused_at) {
+        const elapsed = data.server_now - s.paused_at;
+        if (elapsed > 0) {
+          pomoLeft = pomoLeft - Math.floor(elapsed);
+          if (pomoLeft <= 0) _advancePhase(-pomoLeft);
+        }
+      }
+
+      _updateStatusText();
+      updateDots();
+      updatePomoDisplay();
+      _updatePomoButtonToPaused();
+    })
+    .catch(() => {});
+};
+
+window.addEventListener('beforeunload', () => {
+  _stopAutosave();
+  _saveToBackend();
+});
 
 function togglePomodoro() {
   const btn = document.getElementById('pomo-btn');
@@ -1099,16 +1207,21 @@ function togglePomodoro() {
         handlePhaseComplete();
       }
     }, 1000);
+    _saveToBackend();
   } else {
     clearInterval(pomoTimer);
+    pomoTimer = null;
     isPomoRunning = false;
     btn.innerText = 'RESUME';
     btn.style.borderColor = 'rgba(255,255,255,0.2)';
+    updatePomoDisplay();
+    _saveToBackend();
   }
 }
 
 function handlePhaseComplete() {
   clearInterval(pomoTimer);
+  pomoTimer = null;
   isPomoRunning = false;
 
   const btn = document.getElementById('pomo-btn');
@@ -1141,6 +1254,8 @@ function handlePhaseComplete() {
   btn.innerText = 'START NEXT PHASE';
   btn.style.background = 'transparent';
   btn.style.borderColor = 'rgba(255,255,255,0.2)';
+
+  _saveToBackend();
 }
 
 function updatePomoDisplay() {
@@ -1151,13 +1266,11 @@ function updatePomoDisplay() {
   const m = Math.floor(pomoLeft / 60);
   const s = pomoLeft % 60;
   display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  // Only surface the countdown in the tab title while actively running;
-  // otherwise (not started / paused / finished) restore the plain title.
   document.title = isPomoRunning
     ? `(${m}:${s.toString().padStart(2, '0')}) Onyx`
     : 'Onyx — Neural Engine';
 
-  let totalTime = currentPhase === 'WORK' ? WORK_TIME : currentPhase === 'SHORT' ? SHORT_BREAK : LONG_BREAK;
+  const totalTime = _phaseDuration(currentPhase);
   const progress = ((totalTime - pomoLeft) / totalTime) * 100;
 
   if (btn.innerText !== 'START NEXT PHASE' && btn.innerText !== 'INITIALIZE SEQUENCE') {
@@ -1179,8 +1292,8 @@ function updateDots() {
   }
 }
 
-// Init pomodoro display on load
+// Init pomodoro on load: restore backend state first, then autosave
 document.addEventListener('DOMContentLoaded', () => {
-  updateDots();
-  updatePomoDisplay();
+  loadPomodoroState();
+  _startAutosave();
 });

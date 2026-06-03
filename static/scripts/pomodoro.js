@@ -1,161 +1,285 @@
-/* static/scripts/hud_logic.js */
+/* static/scripts/pomodoro.js — backend-synced Pomodoro state machine */
 
-// --- POMODORO STATE MACHINE ---
-const WORK_TIME = 25 * 60;    
-const SHORT_BREAK = 3 * 60;   
-const LONG_BREAK = 15 * 60;   
-const CYCLES_BEFORE_LONG = 4; 
+const WORK_TIME = 25 * 60;
+const SHORT_BREAK = 3 * 60;
+const LONG_BREAK = 15 * 60;
+const CYCLES_BEFORE_LONG = 4;
+
+const PHASE_DURATIONS = {
+    WORK: WORK_TIME,
+    SHORT: SHORT_BREAK,
+    LONG: LONG_BREAK,
+};
+
+const AUTOSAVE_INTERVAL_MS = 15000;
 
 let pomoTimer = null;
 let pomoLeft = WORK_TIME;
 let isPomoRunning = false;
-let currentPhase = 'WORK'; // 'WORK', 'SHORT', 'LONG'
-let cycleCount = 0;        
+let currentPhase = 'WORK';
+let cycleCount = 0;
+let autosaveHandle = null;
+let _stateLoaded = false;
 
-// 初始化 UI
-updateDots(); 
-updatePomoDisplay(); // 初始化时也刷新一下按钮状态
+function _phaseDuration(phase) {
+    return PHASE_DURATIONS[phase] || WORK_TIME;
+}
+
+function nowSeconds() {
+    return Date.now() / 1000;
+}
+
+function _pomoSnapshot() {
+    return {
+        remaining_seconds: pomoLeft,
+        phase: currentPhase,
+        cycle_count: cycleCount,
+        running: isPomoRunning,
+    };
+}
+
+function _saveToBackend() {
+    const blob = new Blob([JSON.stringify(_pomoSnapshot())], { type: 'application/json' });
+    navigator.sendBeacon('/api/pomodoro/save', blob);
+}
+
+function _startAutosave() {
+    _stopAutosave();
+    autosaveHandle = setInterval(function () {
+        if (isPomoRunning) _saveToBackend();
+    }, AUTOSAVE_INTERVAL_MS);
+}
+
+function _stopAutosave() {
+    if (autosaveHandle) {
+        clearInterval(autosaveHandle);
+        autosaveHandle = null;
+    }
+}
+
+function _advancePhase(overflowSeconds) {
+    var remaining = overflowSeconds;
+    while (remaining >= 0) {
+        if (currentPhase === 'WORK') {
+            cycleCount++;
+            if (cycleCount >= CYCLES_BEFORE_LONG) {
+                currentPhase = 'LONG';
+                cycleCount = 0;
+            } else {
+                currentPhase = 'SHORT';
+            }
+        } else {
+            currentPhase = 'WORK';
+        }
+        var nextDuration = _phaseDuration(currentPhase);
+        if (remaining < nextDuration) {
+            pomoLeft = nextDuration - remaining;
+            return;
+        }
+        remaining -= nextDuration;
+    }
+    pomoLeft = _phaseDuration(currentPhase);
+}
+
+function _updateStatusText() {
+    var statusText = document.getElementById('pomo-status-text');
+    if (!statusText) return;
+    if (currentPhase === 'WORK') {
+        statusText.innerText = '>>> READY TO FOCUS <<<';
+        statusText.style.color = '#ccc';
+    } else if (currentPhase === 'SHORT') {
+        statusText.innerText = '>>> STANDBY MODE (SHORT BREAK) <<<';
+        statusText.style.color = '#2ecc71';
+    } else {
+        statusText.innerText = '>>> SYSTEM COOLING (LONG BREAK) <<<';
+        statusText.style.color = '#3498db';
+    }
+}
+
+function applyRestoredState(state, serverNow) {
+    if (!state) return;
+
+    pomoLeft = state.remaining_seconds;
+    currentPhase = state.phase;
+    cycleCount = state.cycle_count;
+    isPomoRunning = false;
+
+    if (state.running && state.paused_at) {
+        var elapsed = serverNow - state.paused_at;
+        if (elapsed > 0) {
+            pomoLeft = pomoLeft - Math.floor(elapsed);
+            if (pomoLeft <= 0) {
+                _advancePhase(-pomoLeft);
+            }
+        }
+    }
+
+    _updateStatusText();
+    updateDots();
+    updatePomoDisplay();
+    _updatePomoButtonToPaused();
+    _stateLoaded = true;
+}
+
+function _updatePomoButtonToPaused() {
+    var btn = document.getElementById('pomo-btn');
+    if (!btn) return;
+    btn.innerText = (pomoLeft === _phaseDuration(currentPhase) && cycleCount === 0 && currentPhase === 'WORK')
+        ? 'INITIALIZE SEQUENCE'
+        : 'RESUME';
+    btn.style.background = 'transparent';
+    btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+}
+
+function loadPomodoroState() {
+    fetch('/api/pomodoro/load')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.state) {
+                applyRestoredState(data.state, data.server_now);
+            } else {
+                _stateLoaded = true;
+            }
+        })
+        .catch(function () {
+            _stateLoaded = true;
+        });
+}
+
+function savePomodoroState() {
+    _saveToBackend();
+}
+
+window.addEventListener('beforeunload', function () {
+    _stopAutosave();
+    savePomodoroState();
+});
+
+window.addEventListener('DOMContentLoaded', function () {
+    loadPomodoroState();
+    _startAutosave();
+});
 
 function togglePomodoro() {
-    const btn = document.getElementById('pomo-btn');
-    
+    var btn = document.getElementById('pomo-btn');
+
     if (!isPomoRunning) {
-        // === START ===
         isPomoRunning = true;
-        
-        // 只有在 FOCUS 模式下才显示“PAUSE”，休息模式显示“PAUSE BREAK”
+
         if (currentPhase === 'WORK') {
-            btn.innerText = "PAUSE FOCUS";
+            btn.innerText = 'PAUSE FOCUS';
         } else {
-            btn.innerText = "PAUSE BREAK";
+            btn.innerText = 'PAUSE BREAK';
         }
-        
-        // 运行中：边框变成稍微亮一点的白色
-        btn.style.borderColor = "rgba(255, 255, 255, 0.5)"; 
-        
-        pomoTimer = setInterval(() => {
+
+        btn.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+
+        pomoTimer = setInterval(function () {
             if (pomoLeft > 0) {
                 pomoLeft--;
                 updatePomoDisplay();
             } else {
-                // === TIME IS UP ===
                 handlePhaseComplete();
             }
         }, 1000);
-        
+
+        _saveToBackend();
+
     } else {
-        // === PAUSE ===
         clearInterval(pomoTimer);
+        pomoTimer = null;
         isPomoRunning = false;
-        btn.innerText = "RESUME";
-        btn.style.borderColor = "rgba(255, 255, 255, 0.2)"; // 暂停时边框变暗
+        btn.innerText = 'RESUME';
+        btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+        updatePomoDisplay();
+
+        _saveToBackend();
     }
 }
 
 function handlePhaseComplete() {
     clearInterval(pomoTimer);
+    pomoTimer = null;
     isPomoRunning = false;
-    
-    // 播放提示音 (可选)
-    // const audio = new Audio('/static/sounds/bell.mp3'); audio.play().catch(e=>{});
-    
-    const btn = document.getElementById('pomo-btn');
-    const statusText = document.getElementById('pomo-status-text');
+
+    var btn = document.getElementById('pomo-btn');
+    var statusText = document.getElementById('pomo-status-text');
 
     if (currentPhase === 'WORK') {
-        // --- 工作结束 -> 进入休息 ---
         cycleCount++;
         updateDots();
-        
+
         if (cycleCount >= CYCLES_BEFORE_LONG) {
-            // 长休
             currentPhase = 'LONG';
             pomoLeft = LONG_BREAK;
-            statusText.innerText = ">>> SYSTEM COOLING (LONG BREAK) <<<";
-            statusText.style.color = "#3498db"; // 柔和蓝
-            cycleCount = 0; 
+            statusText.innerText = '>>> SYSTEM COOLING (LONG BREAK) <<<';
+            statusText.style.color = '#3498db';
+            cycleCount = 0;
         } else {
-            // 短休
             currentPhase = 'SHORT';
             pomoLeft = SHORT_BREAK;
-            statusText.innerText = ">>> STANDBY MODE (SHORT BREAK) <<<";
-            statusText.style.color = "#2ecc71"; // 柔和绿
+            statusText.innerText = '>>> STANDBY MODE (SHORT BREAK) <<<';
+            statusText.style.color = '#2ecc71';
         }
-        
+
     } else {
-        // --- 休息结束 -> 回到工作 ---
         currentPhase = 'WORK';
         pomoLeft = WORK_TIME;
-        statusText.innerText = ">>> READY TO FOCUS <<<";
-        statusText.style.color = "#ccc"; // 银灰色，不刺眼
-        
-        if (cycleCount === 0) updateDots(); 
+        statusText.innerText = '>>> READY TO FOCUS <<<';
+        statusText.style.color = '#ccc';
+
+        if (cycleCount === 0) updateDots();
     }
-    
+
     updatePomoDisplay();
-    btn.innerText = "START NEXT PHASE";
-    btn.style.background = "transparent"; // 重置进度条
-    btn.style.borderColor = "rgba(255, 255, 255, 0.2)";
+    btn.innerText = 'START NEXT PHASE';
+    btn.style.background = 'transparent';
+    btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+
+    _saveToBackend();
 }
 
 function updatePomoDisplay() {
-    const display = document.getElementById('pomo-timer-display');
-    const btn = document.getElementById('pomo-btn');
-    
-    // 1. 更新数字
-    const m = Math.floor(pomoLeft / 60);
-    const s = pomoLeft % 60;
-    display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    
-    // 2. 更新网页标题
-    document.title = `(${m}:${s}) Obsidian`;
-    
-    // --- 3. 进度条动画核心逻辑 ---
-    // 只有在非初始状态（或者是暂停状态）我们都显示进度，为了美观
-    let totalTime;
-    
-    if (currentPhase === 'WORK') totalTime = WORK_TIME;
-    else if (currentPhase === 'SHORT') totalTime = SHORT_BREAK;
-    else totalTime = LONG_BREAK;
+    var display = document.getElementById('pomo-timer-display');
+    var btn = document.getElementById('pomo-btn');
 
-    // 计算已经过去的时间比例 (0% -> 100%)
-    // 公式: (总时间 - 剩余时间) / 总时间
-    const progress = ((totalTime - pomoLeft) / totalTime) * 100;
+    var m = Math.floor(pomoLeft / 60);
+    var s = pomoLeft % 60;
+    display.innerText = m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0');
 
-    // 只有当开始跑了之后（或者暂停中但有进度），才显示背景
-    // 如果是刚刚重置完等待开始，保持透明
-    if (btn.innerText !== "START NEXT PHASE" && btn.innerText !== "INITIALIZE SEQUENCE") {
-        // 使用 CSS 线性渐变：
-        // 从左到右 | 白色半透明(15%) 填充到 progress% | 之后全是透明
-        btn.style.background = `linear-gradient(90deg, rgba(255, 255, 255, 0.15) ${progress}%, transparent ${progress}%)`;
+    document.title = '(' + m + ':' + (s < 10 ? '0' : '') + s + ') Onyx';
+
+    var totalTime = _phaseDuration(currentPhase);
+    var progress = ((totalTime - pomoLeft) / totalTime) * 100;
+
+    if (btn.innerText !== 'START NEXT PHASE' && btn.innerText !== 'INITIALIZE SEQUENCE') {
+        btn.style.background = 'linear-gradient(90deg, rgba(255, 255, 255, 0.15) ' + progress + '%, transparent ' + progress + '%)';
     } else {
-        btn.style.background = "transparent";
+        btn.style.background = 'transparent';
     }
 }
 
 function updateDots() {
-    const dotsContainer = document.getElementById('pomo-cycle-dots');
+    var dotsContainer = document.getElementById('pomo-cycle-dots');
     if (!dotsContainer) return;
-    
+
     dotsContainer.innerHTML = '';
-    
-    for (let i = 0; i < CYCLES_BEFORE_LONG; i++) {
-        const dot = document.createElement('span');
-        dot.style.width = "6px";  // 稍微改小一点，更精致
-        dot.style.height = "6px";
-        dot.style.borderRadius = "50%";
-        dot.style.margin = "0 4px"; // 间距稍微拉开
-        
+
+    for (var i = 0; i < CYCLES_BEFORE_LONG; i++) {
+        var dot = document.createElement('span');
+        dot.style.width = '6px';
+        dot.style.height = '6px';
+        dot.style.borderRadius = '50%';
+        dot.style.margin = '0 4px';
+
         if (i < cycleCount) {
-            // 已完成：亮白色，带一点透明度
-            dot.style.backgroundColor = "rgba(255, 255, 255, 0.8)"; 
-            dot.style.boxShadow = "0 0 5px rgba(255, 255, 255, 0.5)"; // 淡淡的发光
+            dot.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+            dot.style.boxShadow = '0 0 5px rgba(255, 255, 255, 0.5)';
         } else {
-            // 未完成：深灰，几乎隐形
-            dot.style.backgroundColor = "#333"; 
-            dot.style.boxShadow = "none";
+            dot.style.backgroundColor = '#333';
+            dot.style.boxShadow = 'none';
         }
-        
+
         dotsContainer.appendChild(dot);
     }
 }

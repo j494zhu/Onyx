@@ -270,7 +270,15 @@ def ensure_user_columns():
                 conn.execute(text("ALTER TABLE \"user\" ADD COLUMN todos TEXT DEFAULT '[]'"))
             app.logger.info('Added missing column user.todos')
         except Exception as exc:
-            app.logger.info('Skipped adding user.todos (likely a concurrent worker won the race): %s', exc)
+            app.logger.info('Skipping adding user.todos (likely a concurrent worker won the race): %s', exc)
+
+    if 'pomodoro_state' not in existing_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE \"user\" ADD COLUMN pomodoro_state TEXT DEFAULT NULL"))
+            app.logger.info('Added missing column user.pomodoro_state')
+        except Exception as exc:
+            app.logger.info('Skipping adding user.pomodoro_state (likely a concurrent worker won the race): %s', exc)
 
 
 def initialize_database():
@@ -1034,6 +1042,38 @@ def generate_weekly_insight():
         print(f"Neural Link Error: {e}")
         return jsonify({"status": "error", "message": f"Neural Link Severed: {str(e)}"}), 500
     
+
+@app.route('/api/pomodoro/save', methods=['POST'])
+@login_required
+def pomodoro_save():
+    try:
+        data = request.get_json(silent=True) or json.loads(request.get_data(as_text=True) or '{}')
+    except (ValueError, TypeError):
+        data = {}
+    state = {
+        'remaining_seconds': int(data.get('remaining_seconds', 1500)),
+        'phase': data.get('phase', 'WORK'),
+        'cycle_count': int(data.get('cycle_count', 0)),
+        'running': bool(data.get('running', False)),
+        'paused_at': time.time(),
+    }
+    current_user.pomodoro_state = json.dumps(state)
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/pomodoro/load', methods=['GET'])
+@login_required
+def pomodoro_load():
+    raw = current_user.pomodoro_state
+    if not raw:
+        return jsonify({'state': None, 'server_now': time.time()})
+    try:
+        state = json.loads(raw)
+    except (ValueError, TypeError):
+        return jsonify({'state': None, 'server_now': time.time()})
+    state['server_now'] = time.time()
+    return jsonify({'state': state, 'server_now': state['server_now']})
+
 
 @app.cli.command("count-users")
 @with_appcontext

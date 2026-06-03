@@ -22,6 +22,8 @@ class User(UserMixin, db.Model):
     streak = db.Column(db.Integer, default=0)
     last_check_in = db.Column(db.String(20), default=None)
 
+    pomodoro_state = db.Column(db.Text, default=None)
+
 
 class Expenses(db.Model):
     id = db.Column(db.Integer, primary_key=True)
