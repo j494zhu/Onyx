@@ -121,7 +121,7 @@
         </div>
 
         <div class="form-section-label">Work Style</div>
-        <div class="tag-row" data-settings-field="work_style" data-multi>
+        <div class="tag-row" data-settings-field="work_style">
           {% set ws = profile.work_style_obj or ['solo'] %}
           <button type="button" class="tag-chip {% if 'solo' in ws %}is-selected{% endif %}" data-value="solo">Deep Solo Work</button>
           <button type="button" class="tag-chip {% if 'collaborative' in ws %}is-selected{% endif %}" data-value="collaborative">Collaborative</button>

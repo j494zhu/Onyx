@@ -205,12 +205,12 @@ body {
 
 .form-input--time {
   font-variant-numeric: tabular-nums;
-  width: 110px;
+  width: 150px;
   text-align: center;
 }
 
 .form-input--sm {
-  width: 90px;
+  width: 121px;
   padding: 7px 8px;
   font-size: 0.8rem;
 }
@@ -396,12 +396,12 @@ body {
 .onboard-btn--back {
   background: transparent;
   border: 1px solid var(--border-default);
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .onboard-btn--back:hover:not(:disabled) {
   border-color: var(--border-strong);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .onboard-btn--back:disabled {
@@ -424,7 +424,7 @@ body {
 .onboard-skip {
   background: none;
   border: none;
-  color: var(--text-ghost);
+  color: var(--text-muted);
   cursor: pointer;
   font-family: inherit;
   font-size: 0.65rem;
@@ -445,6 +445,10 @@ body {
   margin-bottom: 4px;
 }
 
+.settings-header .onboard-sub {
+  margin-top: 4px;
+}
+
 .settings-form {
   display: flex;
   flex-direction: column;
@@ -456,7 +460,7 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .settings-section__title {

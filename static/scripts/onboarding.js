@@ -35,6 +35,20 @@ function initTagChips(container) {
       chip.classList.toggle('is-selected');
     });
   });
+  // Single-select tag rows (radio-like)
+  container.querySelectorAll('.tag-row:not([data-multi])').forEach(function (row) {
+    // Skip rows that are inside choice-card areas (card-row handles those)
+    if (row.dataset.field || row.dataset.settingsField) {
+      row.addEventListener('click', function (e) {
+        var chip = e.target.closest('.tag-chip');
+        if (!chip) return;
+        row.querySelectorAll('.tag-chip').forEach(function (c) {
+          c.classList.remove('is-selected');
+        });
+        chip.classList.add('is-selected');
+      });
+    }
+  });
 }
 
 // ── Gather form data from DOM ─────────────────────────────────
@@ -92,6 +106,15 @@ function collectFormData(container) {
     });
     data[field] = selected;
   });
+  // Tag chips (single-select)
+  container.querySelectorAll('.tag-row:not([data-multi])').forEach(function (row) {
+    var field = row.dataset.field || row.dataset.settingsField;
+    if (!field) return;
+    var selected = row.querySelector('.tag-chip.is-selected');
+    if (selected) {
+      data[field] = selected.dataset.value;
+    }
+  });
 
   return data;
 }
@@ -112,19 +135,29 @@ function updateReview() {
   var rhyEl = document.getElementById('review-rhythm');
   if (rhyEl) rhyEl.innerText = reviewRhythm;
 
+  function asArray(val) {
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === 'string') return [val];
+    return [];
+  }
+
   var styleParts = [];
   if (data.chronotype) styleParts.push(data.chronotype === 'morning' ? 'Morning Person' : data.chronotype === 'night_owl' ? 'Night Owl' : 'Flexible');
   if (data.peak_start && data.peak_end) styleParts.push('Peak ' + data.peak_start + '-' + data.peak_end);
   if (data.daily_burden) styleParts.push(data.daily_burden.charAt(0).toUpperCase() + data.daily_burden.slice(1) + ' burden');
-  if (data.work_style) styleParts.push('Style: ' + data.work_style.join(', '));
+  var ws = asArray(data.work_style);
+  if (ws.length) styleParts.push('Style: ' + ws.join(', '));
   var styEl = document.getElementById('review-style');
   if (styEl) styEl.innerText = styleParts.join(' \u00B7 ') || 'Not set';
 
   var goalParts = [];
   if (data.primary_goal) goalParts.push('Primary: ' + data.primary_goal);
-  if (data.interests && data.interests.length) goalParts.push('Interests: ' + data.interests.join(', '));
-  if (data.ai_role && data.ai_role.length) goalParts.push('AI Role: ' + data.ai_role.join(', '));
-  if (data.secondary_goals && data.secondary_goals.length) goalParts.push('Also: ' + data.secondary_goals.join(', '));
+  var interests = asArray(data.interests);
+  if (interests.length) goalParts.push('Interests: ' + interests.join(', '));
+  var aiRole = asArray(data.ai_role);
+  if (aiRole.length) goalParts.push('AI Role: ' + aiRole.join(', '));
+  var sg = asArray(data.secondary_goals);
+  if (sg.length) goalParts.push('Also: ' + sg.join(', '));
   var golEl = document.getElementById('review-goals');
   if (golEl) golEl.innerText = goalParts.join('\n') || 'Not set';
 }
@@ -179,7 +212,7 @@ if (isOnOnboardingPage()) {
     if (step === totalSteps - 1) {
       btnNext.textContent = 'Complete Setup';
       btnSkip.style.display = 'none';
-      updateReview();
+      try { updateReview(); } catch (e) { console.error('updateReview failed:', e); }
     } else {
       btnNext.textContent = 'Next';
       btnSkip.style.display = '';
@@ -198,22 +231,33 @@ if (isOnOnboardingPage()) {
       goTo(currentStep + 1);
     } else {
       // Final submit
-      btnNext.disabled = true;
-      btnNext.textContent = 'SAVING...';
-      var payload = buildPayload();
-      fetch('/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (d.redirect) window.location.href = d.redirect;
+      try {
+        btnNext.disabled = true;
+        btnNext.textContent = 'SAVING...';
+        var payload = buildPayload();
+        fetch('/onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         })
-        .catch(function () {
-          btnNext.disabled = false;
-          btnNext.textContent = 'Complete Setup';
-        });
+          .then(function (r) {
+            if (!r.ok) throw new Error('Server error: ' + r.status);
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.redirect) window.location.href = d.redirect;
+            else window.location.href = '/';
+          })
+          .catch(function (err) {
+            console.error('Submit failed:', err);
+            btnNext.disabled = false;
+            btnNext.textContent = 'Complete Setup';
+          });
+      } catch (e) {
+        console.error('buildPayload failed:', e);
+        btnNext.disabled = false;
+        btnNext.textContent = 'Complete Setup';
+      }
     }
   });
 

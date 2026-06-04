@@ -645,10 +645,11 @@ def _update_profile_from_form(profile, form_data):
                 setattr(profile, json_field, json.dumps(val))
             elif isinstance(val, str):
                 try:
-                    json.loads(val)  # validate
+                    json.loads(val)  # validate existing JSON
                     setattr(profile, json_field, val)
                 except json.JSONDecodeError:
-                    pass
+                    # Single string value → wrap in list
+                    setattr(profile, json_field, json.dumps([val]))
 
 
 # ── Onboarding ──
