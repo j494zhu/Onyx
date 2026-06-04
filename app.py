@@ -362,6 +362,13 @@ def index(): # get user lgo entry;
         if items_to_archive:
             db.session.commit()
         
+        # [Streak] Daily check-in on dashboard load (first visit each logical day).
+        old_streak = current_user.streak
+        update_user_streak(current_user, current_logical_date)
+        streak_incremented = current_user.streak > old_streak
+        if current_user.streak != old_streak:
+            db.session.commit()
+        
         # Re-fetch remaining records for today.
         expenses = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).order_by(Expenses.timestamp.desc()).all()
 
@@ -391,6 +398,8 @@ def index(): # get user lgo entry;
             model_confidence=model_confidence,
             todos=todos,
             todos_json=json.dumps(todos),
+            streak_incremented=streak_incremented,
+            streak=current_user.streak,
         )
 
 @app.route('/end_day', methods=['POST'])

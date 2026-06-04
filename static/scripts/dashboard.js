@@ -1296,4 +1296,14 @@ function updateDots() {
 document.addEventListener('DOMContentLoaded', () => {
   loadPomodoroState();
   _startAutosave();
+
+  /* ── Streak Check-in Toast auto-dismiss ── */
+  const $toast = document.getElementById('streak-toast');
+  if ($toast && $toast.classList.contains('streak-toast--show')) {
+    setTimeout(() => {
+      $toast.classList.remove('streak-toast--show');
+      $toast.classList.add('streak-toast--hide');
+      setTimeout(() => { $toast.remove(); }, 600);
+    }, 3500);
+  }
 });

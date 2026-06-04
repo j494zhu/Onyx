@@ -27,6 +27,19 @@
 </head>
 <body>
 
+  {% if streak_incremented %}
+  <!-- ═══ STREAK CHECK-IN TOAST ═══ -->
+  <div id="streak-toast" class="streak-toast streak-toast--show">
+    <div class="streak-toast__icon">
+      <span class="streak-spinner" aria-hidden="true"></span>
+    </div>
+    <div class="streak-toast__body">
+      <span class="streak-toast__label">DAILY CHECK-IN</span>
+      <span class="streak-toast__count">+1 &middot; {{ streak }} DAY STREAK</span>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ═══ HEADER ═══════════════════════════════════════════ -->
   <header class="dash-header">
     <h2 class="dash-title">{{ current_user.username }}'s Log</h2>

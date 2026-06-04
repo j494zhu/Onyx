@@ -1971,6 +1971,106 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════════════
+   STREAK CHECK-IN TOAST
+   ═══════════════════════════════════════════════════════════════ */
+
+.streak-toast {
+  position: fixed;
+  top: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: top var(--duration) var(--ease),
+              opacity var(--duration) var(--ease);
+}
+
+.streak-toast--show {
+  top: 24px;
+  opacity: 1;
+  pointer-events: auto;
+  border-color: rgba(201, 169, 78, 0.35);
+}
+
+.streak-toast--hide {
+  top: -80px;
+  opacity: 0;
+}
+
+.streak-toast__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-gold);
+  flex-shrink: 0;
+}
+
+/* CLI-style throbber: cycles | / - \ like a Linux package install spinner. */
+.streak-spinner {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  width: 14px;               /* fixed box so glyph swaps don't shift layout */
+  text-align: center;
+  color: #ffe596;            /* light yellow — spinner only, not the toast text */
+}
+
+.streak-spinner::after {
+  content: "\2807";
+  animation: streak-spinner-spin 0.8s steps(1, end) infinite;  /* ~80ms per frame, like npm/docker */
+}
+
+/* Modern Braille throbber: ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ — smooth 10-frame rotation. */
+@keyframes streak-spinner-spin {
+  0%   { content: "\280B"; }   /* ⠋ */
+  10%  { content: "\2819"; }   /* ⠙ */
+  20%  { content: "\2839"; }   /* ⠹ */
+  30%  { content: "\2838"; }   /* ⠸ */
+  40%  { content: "\283C"; }   /* ⠼ */
+  50%  { content: "\2834"; }   /* ⠴ */
+  60%  { content: "\2826"; }   /* ⠦ */
+  70%  { content: "\2827"; }   /* ⠧ */
+  80%  { content: "\2807"; }   /* ⠇ */
+  90%  { content: "\280F"; }   /* ⠏ */
+}
+
+.streak-toast__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.streak-toast__label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.streak-toast__count {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-gold);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
    DARK MODE OVERRIDE
    The class is set on <html> by a pre-paint script so the dark
    background is applied on the very first paint (no white flash).
