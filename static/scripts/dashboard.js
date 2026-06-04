@@ -826,11 +826,11 @@ async function runNeuralAudit() {
   const statusDot = document.getElementById('hud-status-dot');
   const statusText = document.getElementById('hud-status-text');
   const rlhfZone = document.getElementById('rlhf-zone');
+  const rubricEl = document.getElementById('hud-rubric');
 
   const toneInput = document.querySelector('input[name="ai_tone"]:checked');
   const selectedTone = toneInput ? toneInput.value : 'strict';
 
-  // 用浏览器获取用户真实本地时间，传给后端（服务器/容器时区多为 UTC，不可靠）
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -843,6 +843,7 @@ async function runNeuralAudit() {
   statusText.innerText = 'Processing';
 
   if (rlhfZone) rlhfZone.style.display = 'none';
+  if (rubricEl) rubricEl.style.display = 'none';
 
   try {
     const response = await fetch('/api/ai/audit', {
@@ -873,6 +874,12 @@ async function runNeuralAudit() {
     statusText.innerText = 'Online';
 
     contentArea.style.display = 'flex';
+
+    // Render rubric summary
+    if (data.rubric && data.rubric.length > 0 && rubricEl) {
+      renderRubric(data.rubric, rubricEl);
+    }
+
     btn.innerText = 'REFRESH DATA';
 
     currentAuditSession = {
@@ -881,14 +888,12 @@ async function runNeuralAudit() {
     };
 
     if (rlhfZone) {
-      // Reset feedback state so the new scan can be rated once.
       rlhfLocked = false;
       rlhfZone.classList.remove('is-submitted', 'is-cleared');
       const scale = document.getElementById('rlhf-scale');
       if (scale) {
         scale.querySelectorAll('.rlhf-dot').forEach((d) => d.classList.remove('is-selected'));
       }
-
       rlhfZone.style.display = 'block';
       rlhfZone.style.opacity = '0';
       setTimeout(() => (rlhfZone.style.opacity = '1'), 400);
@@ -905,6 +910,61 @@ async function runNeuralAudit() {
     btn.disabled = false;
   }
 }
+
+
+function renderRubric(dimensions, container) {
+  const grid = document.getElementById('hud-rubric-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  const nameColors = {
+    'Task Completion': 'var(--accent-gold)',
+    'Focus & Depth': 'var(--accent-purple)',
+    'Time Discipline': 'var(--accent-blue)',
+    'Wellness & Balance': 'var(--accent-teal)',
+  };
+
+  dimensions.forEach(function (dim) {
+    const rawTotal = dim.points.reduce(function (sum, p) { return sum + p.score; }, 0);
+    const max = dim.points.length * 5;
+    const pct = Math.round((rawTotal / max) * 100);
+
+    var cell = document.createElement('div');
+    cell.className = 'rubric-cell';
+    cell.innerHTML =
+      '<span class="rubric-cell__name" style="color:' + (nameColors[dim.name] || 'var(--text-muted)') + '">' +
+        dim.name +
+      '</span>' +
+      '<span class="rubric-cell__score">' + rawTotal + '/' + max + '</span>' +
+      '<span class="rubric-cell__bar">' +
+        '<span class="rubric-cell__fill" style="width:' + pct + '%"></span>' +
+      '</span>';
+
+    cell.addEventListener('click', function () {
+      cell.classList.toggle('is-expanded');
+    });
+
+    // Expanded detail (tooltip-style)
+    var detail = document.createElement('div');
+    detail.className = 'rubric-cell__detail';
+    dim.points.forEach(function (p) {
+      var row = document.createElement('div');
+      row.className = 'rubric-point';
+      row.innerHTML =
+        '<span class="rubric-point__label">' + p.label + '</span>' +
+        '<span class="rubric-point__score">' + p.score + '/5</span>' +
+        '<span class="rubric-point__note">' + (p.note || '') + '</span>';
+      detail.appendChild(row);
+    });
+    cell.appendChild(detail);
+
+    grid.appendChild(cell);
+  });
+
+  container.style.display = 'block';
+}
+
 
 // RLHF feedback for Neural Audit — one vote per scan.
 let rlhfLocked = false;

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, date, timezone
 from itertools import groupby
 from collections import OrderedDict
 from sqlalchemy import and_, or_, text
-from model import db, User, Expenses, AlignmentSignal
+from model import db, User, Expenses, AlignmentSignal, UserProfile
 
 from services.prompts import get_audit_prompt, get_weekly_audit_prompt
 from services.stats import calculate_stats_from_logs, calculate_duration
@@ -389,6 +389,13 @@ def index(): # get user lgo entry;
             current_user.quick_note = ""  # Migrated; free-text field retired for To-Do.
             db.session.commit()
 
+        # Check if onboarding was completed — redirect if first visit with no profile data.
+        profile = load_user_profile(current_user)
+        onboarding_needed = (
+            profile.primary_goal == ''
+            and json.loads(profile.interests or '[]') == []
+        )
+
         return render_template(
             'index.html',
             expenses=expenses,
@@ -400,6 +407,7 @@ def index(): # get user lgo entry;
             todos_json=json.dumps(todos),
             streak_incremented=streak_incremented,
             streak=current_user.streak,
+            onboarding_needed=onboarding_needed,
         )
 
 @app.route('/end_day', methods=['POST'])
@@ -562,8 +570,13 @@ def register():
         # Hash password
         new_user = User(username=username, password=generate_password_hash(password, method='pbkdf2:sha256'))
         db.session.add(new_user)
+        db.session.flush()  # get the new user's id
+        # Create a default profile so the onboarding page can pre-fill it.
+        profile = UserProfile(user_id=new_user.id)
+        db.session.add(profile)
         db.session.commit()
-        return redirect('/login')
+        login_user(new_user)
+        return redirect('/onboarding')
     else:
         return render_template('register.html')
 
@@ -594,6 +607,128 @@ def login():
 def logout():
     logout_user()
     return redirect('/login')
+
+
+# ── User Profile helpers ──
+def load_user_profile(user):
+    """Get or create a UserProfile for the given user."""
+    if user.profile:
+        return user.profile
+    p = UserProfile(user_id=user.id)
+    db.session.add(p)
+    db.session.commit()
+    return p
+
+
+def _update_profile_from_form(profile, form_data):
+    """Write form/JSON dict fields onto a UserProfile instance."""
+    for field in [
+        'typical_wakeup', 'typical_bedtime',
+        'breakfast_window_start', 'breakfast_window_end',
+        'lunch_window_start', 'lunch_window_end',
+        'dinner_window_start', 'dinner_window_end',
+        'chronotype', 'peak_start', 'peak_end',
+        'daily_burden', 'primary_goal', 'exercise_goal',
+        'health_note',
+    ]:
+        if field in form_data and form_data[field] is not None:
+            setattr(profile, field, form_data[field])
+
+    # JSON-array fields
+    for json_field in [
+        'work_style', 'secondary_goals', 'interests',
+        'ai_role', 'tracked_habits',
+    ]:
+        if json_field in form_data:
+            val = form_data[json_field]
+            if isinstance(val, list):
+                setattr(profile, json_field, json.dumps(val))
+            elif isinstance(val, str):
+                try:
+                    json.loads(val)  # validate
+                    setattr(profile, json_field, val)
+                except json.JSONDecodeError:
+                    pass
+
+
+# ── Onboarding ──
+@app.route('/onboarding', methods=['GET', 'POST'])
+@login_required
+def onboarding():
+    if request.method == 'POST':
+        profile = load_user_profile(current_user)
+        data = request.get_json() or {}
+        _update_profile_from_form(profile, data)
+        db.session.commit()
+        return jsonify({"status": "success", "redirect": "/"})
+
+    return render_template('onboarding.html')
+
+
+# ── Settings page ──
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings_page():
+    profile = load_user_profile(current_user)
+
+    if request.method == 'POST':
+        if request.is_json:
+            data = request.get_json()
+            _update_profile_from_form(profile, data)
+            db.session.commit()
+            return jsonify({"status": "success"})
+        _update_profile_from_form(profile, request.form.to_dict())
+        db.session.commit()
+        return redirect('/')
+
+    # Pre-compute JSON-derived fields for Jinja2
+    profile.work_style_obj = json.loads(profile.work_style or '["solo"]')
+    profile.interests_obj = json.loads(profile.interests or '[]')
+    profile.ai_role_obj = json.loads(profile.ai_role or '["general"]')
+    profile.tracked_habits_obj = json.loads(profile.tracked_habits or '[]')
+    sgs = json.loads(profile.secondary_goals or '[]')
+    profile.secondary_goals_text = ', '.join(sgs)
+
+    return render_template('settings.html', profile=profile)
+
+
+# ── Profile API (AJAX) ──
+@app.route('/api/profile', methods=['GET'])
+@login_required
+def get_profile():
+    profile = load_user_profile(current_user)
+    return jsonify({
+        'typical_wakeup': profile.typical_wakeup,
+        'typical_bedtime': profile.typical_bedtime,
+        'breakfast_window_start': profile.breakfast_window_start,
+        'breakfast_window_end': profile.breakfast_window_end,
+        'lunch_window_start': profile.lunch_window_start,
+        'lunch_window_end': profile.lunch_window_end,
+        'dinner_window_start': profile.dinner_window_start,
+        'dinner_window_end': profile.dinner_window_end,
+        'chronotype': profile.chronotype,
+        'peak_start': profile.peak_start,
+        'peak_end': profile.peak_end,
+        'daily_burden': profile.daily_burden,
+        'work_style': json.loads(profile.work_style or '["solo"]'),
+        'primary_goal': profile.primary_goal,
+        'secondary_goals': json.loads(profile.secondary_goals or '[]'),
+        'interests': json.loads(profile.interests or '[]'),
+        'ai_role': json.loads(profile.ai_role or '["general"]'),
+        'exercise_goal': profile.exercise_goal,
+        'tracked_habits': json.loads(profile.tracked_habits or '[]'),
+        'health_note': profile.health_note,
+    })
+
+
+@app.route('/api/profile', methods=['POST'])
+@login_required
+def update_profile():
+    profile = load_user_profile(current_user)
+    data = request.get_json() or {}
+    _update_profile_from_form(profile, data)
+    db.session.commit()
+    return jsonify({"status": "success"})
 
 
 # save notebook
@@ -698,10 +833,10 @@ def stream_events():
 @app.route('/api/ai/audit', methods=['POST'])
 @login_required
 def ai_audit():
-    # --- 1. Rate-limit logic (unchanged) ---
+    # --- 1. Rate-limit logic ---
     last_run = session.get('last_audit_time')
     now = datetime.now()
-    
+
     if last_run:
         last_time = datetime.fromisoformat(last_run)
         if now - last_time < timedelta(seconds=10):
@@ -714,12 +849,11 @@ def ai_audit():
 
     session['last_audit_time'] = now.isoformat()
 
-    # --- 2. Collect data (unchanged) ---
+    # --- 2. Collect data ---
     data = request.get_json() or {}
     user_tone = data.get('tone', 'strict')
-    # 用户真实本地时间（前端浏览器获取并传来）；容器时区多为 UTC，不能直接用服务器时间。
     client_time = data.get('client_time')
-    
+
     logical_date = get_logical_date(datetime.now())
     today_logs = Expenses.query.filter(
         Expenses.user_id == current_user.id,
@@ -728,45 +862,39 @@ def ai_audit():
             Expenses.is_archived == False
         )
     ).all()
-    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
-    
+
     logs_data = [f"{log.start_time}-{log.end_time}: {log.desc}" for log in today_logs]
-    
+    if not logs_data:
+        logs_data = ["(No activity logged yet today)"]
+
     notebook = current_user.notebook
-    # The To-Do list now lives in the structured `todos` field; render it as
-    # a plain-text checklist so the audit prompt keeps the same context.
     quick_note = todos_to_text(load_todos(current_user))
 
-    # Build prompt text
-    prompt_text = get_audit_prompt(notebook, quick_note, logs_data, tone=user_tone, current_time=client_time)
+    # --- 3. Load user profile for personalization ---
+    profile = load_user_profile(current_user)
 
-    # Tone-dependent temperature: gentle is warm/creative, strict stays tight.
+    # --- 4. Build split system/user prompts ---
+    system_prompt, user_prompt = get_audit_prompt(
+        notebook, quick_note, logs_data,
+        tone=user_tone,
+        current_time=client_time,
+        user_profile=profile,
+    )
+
     tone_temperature = {"gentle": 1.0, "roast": 0.8, "strict": 0.5}
     audit_temperature = tone_temperature.get(user_tone, 0.5)
 
-    # --- 3. Call DeepSeek API (core change point) ---
-    # Key should come from env vars (already configured above).
-
-
-    # Build DeepSeek OpenAI-compatible request payload.
+    # --- 5. Call DeepSeek API ---
     payload = {
-        # Fast and cost-effective model choice.
         "model": "deepseek-v4-flash",
-
         "messages": [
-            {
-                "role": "system",
-                "content": "You are the user's personal secretary. Stay fully in the persona and voice "
-                           "defined in the user message, and always reply with ONLY a single raw JSON object."
-            },
-            {
-                "role": "user",
-                "content": prompt_text
-            }
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_prompt},
         ],
-        "temperature": audit_temperature, # Tone-dependent (gentle warmer, strict tighter).
+        "temperature": audit_temperature,
         "stream": False,
-        "thinking": {"type": "disabled"} # Disable chain-of-thought for speed.
+        "thinking": {"type": "enabled"},
+        "response_format": {"type": "json_object"},
     }
 
     headers = {
@@ -775,21 +903,52 @@ def ai_audit():
     }
 
     try:
-        # Send POST request via requests.
         response = requests.post(
             "https://api.deepseek.com/chat/completions",
-            headers=headers, 
+            headers=headers,
             json=payload,
-            timeout=30 # Timeout safeguard.
+            timeout=45
         )
-        response.raise_for_status() # Raise exception on 4xx/5xx.
-        
+        response.raise_for_status()
+
         full_res = response.json()
         raw_content = full_res['choices'][0]['message']['content']
 
-        # Clean and parse JSON.
+        # Parse JSON — with response_format this should be clean.
         clean_json = raw_content.replace("```json", "").replace("```", "").strip()
-        return jsonify(json.loads(clean_json))
+        ai_data = json.loads(clean_json)
+
+        # --- 6. Calculate final weighted score from rubric ---
+        rubric = ai_data.get('rubric', {}).get('dimensions', [])
+        weighted_score = 0
+        if rubric:
+            for dim in rubric:
+                raw_total = sum(p.get('score', 0) for p in dim.get('points', []))
+                weighted_score += (raw_total / 20.0) * 100 * dim.get('weight', 0.25)
+        final_score = round(weighted_score)
+
+        # Override: status = red if after 1 AM with recent activity.
+        status = ai_data.get('status', 'green')
+        try:
+            hour = int(client_time.split(' ')[1].split(':')[0]) if client_time else 12
+        except Exception:
+            hour = datetime.now().hour
+        if hour >= 1 and hour < 6 and logs_data and logs_data[0] != "(No activity logged yet today)":
+            status = 'red'
+        elif final_score >= 70:
+            status = 'green'
+        elif final_score >= 40:
+            status = 'yellow'
+        else:
+            status = 'red'
+
+        return jsonify({
+            "score": final_score,
+            "status": status,
+            "insight": ai_data.get('insight', ''),
+            "warning": ai_data.get('warning', 'None'),
+            "rubric": rubric,
+        })
 
     except Exception as e:
         print(f"DeepSeek Error: {str(e)}")

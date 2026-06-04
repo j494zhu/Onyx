@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onyx — Setup</title>
+
+  <style>
+    /* ─── THEME PRE-PAINT ─── */
+    body { visibility: hidden; }
+    html.dark-mode body, body.dark-mode, body { visibility: visible; }
+  </style>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('onyx-dark-mode');
+        var prefersDark = window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = stored === '1' || (stored === null && prefersDark);
+        if (dark) document.documentElement.classList.add('dark-mode');
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+</head>
+<body>
+
+<div class="onboard-wrapper">
+  <div class="onboard-card">
+
+    <!-- Step dots -->
+    <div class="onboard-steps">
+      <span class="onboard-dot is-active" data-step="0"></span>
+      <span class="onboard-dot" data-step="1"></span>
+      <span class="onboard-dot" data-step="2"></span>
+      <span class="onboard-dot" data-step="3"></span>
+    </div>
+
+    <!-- Slide container -->
+    <div class="onboard-slides" id="onboard-slides">
+
+      <!-- ═══ STEP 1: RHYTHM ═══ -->
+      <div class="onboard-slide is-active" data-slide="0">
+        <h2 class="onboard-title">When does your day begin?</h2>
+        <p class="onboard-sub">Help me understand your natural rhythm</p>
+
+        <div class="form-row form-row--dual">
+          <label class="form-field">
+            <span class="form-label">Wake Up</span>
+            <input type="time" class="form-input form-input--time" id="wakeup" value="08:00">
+          </label>
+          <label class="form-field">
+            <span class="form-label">Bedtime</span>
+            <input type="time" class="form-input form-input--time" id="bedtime" value="23:30">
+          </label>
+        </div>
+
+        <div class="form-section-label">Meal Windows</div>
+
+        <label class="form-field">
+          <span class="form-label">Breakfast</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" id="bfast-start" value="07:00">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" id="bfast-end" value="09:00">
+          </div>
+        </label>
+
+        <label class="form-field">
+          <span class="form-label">Lunch</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" id="lunch-start" value="12:00">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" id="lunch-end" value="13:30">
+          </div>
+        </label>
+
+        <label class="form-field">
+          <span class="form-label">Dinner</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" id="dinner-start" value="18:00">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" id="dinner-end" value="20:00">
+          </div>
+        </label>
+      </div>
+
+      <!-- ═══ STEP 2: STYLE ═══ -->
+      <div class="onboard-slide" data-slide="1">
+        <h2 class="onboard-title">How do you work best?</h2>
+        <p class="onboard-sub">Select what describes you</p>
+
+        <div class="form-section-label">Chronotype</div>
+        <div class="card-row">
+          <button class="choice-card is-selected" data-field="chronotype" data-value="morning">
+            <span class="choice-card__icon">☀️</span>
+            <span class="choice-card__label">Morning Person</span>
+          </button>
+          <button class="choice-card" data-field="chronotype" data-value="night_owl">
+            <span class="choice-card__icon">🌙</span>
+            <span class="choice-card__label">Night Owl</span>
+          </button>
+          <button class="choice-card" data-field="chronotype" data-value="flexible">
+            <span class="choice-card__icon">🔄</span>
+            <span class="choice-card__label">Flexible</span>
+          </button>
+        </div>
+
+        <label class="form-field">
+          <span class="form-label">Peak Productivity Window</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" id="peak-start" value="09:00">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" id="peak-end" value="12:00">
+          </div>
+        </label>
+
+        <div class="form-section-label">Daily Burden</div>
+        <div class="card-row">
+          <button class="choice-card" data-field="daily_burden" data-value="light">
+            <span class="choice-card__label">Light</span>
+            <span class="choice-card__hint">Easy day, few obligations</span>
+          </button>
+          <button class="choice-card is-selected" data-field="daily_burden" data-value="medium">
+            <span class="choice-card__label">Medium</span>
+            <span class="choice-card__hint">Moderate workload</span>
+          </button>
+          <button class="choice-card" data-field="daily_burden" data-value="heavy">
+            <span class="choice-card__label">Heavy</span>
+            <span class="choice-card__hint">Packed schedule</span>
+          </button>
+        </div>
+
+        <div class="form-section-label">Work Style</div>
+        <div class="tag-row" data-field="work_style" data-multi>
+          <button class="tag-chip is-selected" data-value="solo">Deep Solo Work</button>
+          <button class="tag-chip" data-value="collaborative">Collaborative</button>
+          <button class="tag-chip" data-value="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <!-- ═══ STEP 3: GOALS ═══ -->
+      <div class="onboard-slide" data-slide="2">
+        <h2 class="onboard-title">What are you building?</h2>
+        <p class="onboard-sub">So I know what matters to you</p>
+
+        <label class="form-field">
+          <span class="form-label">Primary Goal</span>
+          <input type="text" class="form-input" id="primary-goal"
+                 placeholder="e.g. Master machine learning engineering..."
+                 maxlength="200">
+        </label>
+
+        <div class="form-section-label">Interests</div>
+        <div class="tag-row" data-field="interests" data-multi>
+          <button class="tag-chip" data-value="Python">Python</button>
+          <button class="tag-chip" data-value="Algorithms">Algorithms</button>
+          <button class="tag-chip" data-value="System Design">System Design</button>
+          <button class="tag-chip" data-value="Machine Learning">Machine Learning</button>
+          <button class="tag-chip" data-value="Math">Math</button>
+          <button class="tag-chip" data-value="Web Dev">Web Dev</button>
+          <button class="tag-chip" data-value="DevOps">DevOps</button>
+          <button class="tag-chip" data-value="Data Science">Data Science</button>
+          <button class="tag-chip" data-value="Writing">Writing</button>
+          <button class="tag-chip" data-value="Design">Design</button>
+        </div>
+
+        <div class="form-section-label">AI Role (how should I help you?)</div>
+        <div class="tag-row" data-field="ai_role" data-multi>
+          <button class="tag-chip is-selected" data-value="general">General Assistant</button>
+          <button class="tag-chip" data-value="accountability">Accountability Partner</button>
+          <button class="tag-chip" data-value="wellness">Wellness Coach</button>
+          <button class="tag-chip" data-value="time_tracker">Time Tracker</button>
+        </div>
+
+        <div class="form-section-label">Secondary Goals (comma-separated)</div>
+        <textarea class="form-input form-input--area" id="secondary-goals"
+                  placeholder="Build portfolio project, Read 2 papers/week, Exercise 3x/week..."
+                  rows="3" maxlength="500"></textarea>
+      </div>
+
+      <!-- ═══ STEP 4: REVIEW ═══ -->
+      <div class="onboard-slide" data-slide="3">
+        <h2 class="onboard-title">Your Neural Profile</h2>
+        <p class="onboard-sub">Ready to start? You can change anything later</p>
+
+        <div class="review-block" data-review="rhythm">
+          <div class="review-block__header">
+            <span class="review-block__title">Your Rhythm</span>
+            <button class="review-block__edit" data-goto="0">Edit</button>
+          </div>
+          <p class="review-block__text" id="review-rhythm"></p>
+        </div>
+
+        <div class="review-block" data-review="style">
+          <div class="review-block__header">
+            <span class="review-block__title">Your Style</span>
+            <button class="review-block__edit" data-goto="1">Edit</button>
+          </div>
+          <p class="review-block__text" id="review-style"></p>
+        </div>
+
+        <div class="review-block" data-review="goals">
+          <div class="review-block__header">
+            <span class="review-block__title">Your Goals</span>
+            <button class="review-block__edit" data-goto="2">Edit</button>
+          </div>
+          <p class="review-block__text" id="review-goals"></p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Navigation -->
+    <div class="onboard-nav">
+      <button class="onboard-btn onboard-btn--back" id="btn-back" disabled>Back</button>
+      <button class="onboard-btn onboard-btn--next" id="btn-next">Next</button>
+    </div>
+    <button class="onboard-skip" id="btn-skip">Skip for now</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='scripts/onboarding.js') }}"></script>
+</body>
+</html>

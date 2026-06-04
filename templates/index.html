@@ -84,6 +84,8 @@
       <span class="nav-divider">|</span>
       <button onclick="openWeeklyInsight()" class="nav-link nav-link--blue">Weekly Intel</button>
       <span class="nav-divider">|</span>
+      <a href="/settings" class="nav-link nav-link--teal">Settings</a>
+      <span class="nav-divider">|</span>
       <a href="/logout" class="nav-link nav-link--rose">Logout</a>
     </nav>
   </header>
@@ -274,6 +276,12 @@
           <input type="radio" id="tone-gentle" name="ai_tone" value="gentle">
           <label for="tone-gentle" title="Mental support">GENTLE</label>
         </div>
+        <a href="/settings" class="hud-gear" title="Edit Preferences" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </a>
       </div>
 
       <div id="hud-content" class="hud-content-area">
@@ -284,6 +292,9 @@
         <div id="hud-insight-text" class="hud-insight">System Ready. Awaiting uplink...</div>
         <div id="hud-warning-box" class="hud-warning" style="display:none;">
           ⚠ <span id="hud-warn-text"></span>
+        </div>
+        <div id="hud-rubric" class="hud-rubric" style="display:none;">
+          <div class="hud-rubric__grid" id="hud-rubric-grid"></div>
         </div>
       </div>
 

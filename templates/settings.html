@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onyx — Settings</title>
+
+  <style>
+    body { visibility: hidden; }
+  </style>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('onyx-dark-mode');
+        var prefersDark = window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = stored === '1' || (stored === null && prefersDark);
+        if (dark) document.documentElement.classList.add('dark-mode');
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+</head>
+<body>
+
+<div class="onboard-wrapper">
+  <div class="onboard-card onboard-card--settings">
+
+    <div class="settings-header">
+      <h2 class="onboard-title">Neural Profile Settings</h2>
+      <p class="onboard-sub">Update your preferences — these calibrate the AI audit</p>
+    </div>
+
+    <form id="settings-form" class="settings-form">
+
+      <!-- Category 1: Daily Rhythm -->
+      <fieldset class="settings-section">
+        <legend class="settings-section__title">Daily Rhythm</legend>
+
+        <div class="form-row form-row--dual">
+          <label class="form-field">
+            <span class="form-label">Wake Up</span>
+            <input type="time" class="form-input form-input--time" name="typical_wakeup" value="{{ profile.typical_wakeup }}">
+          </label>
+          <label class="form-field">
+            <span class="form-label">Bedtime</span>
+            <input type="time" class="form-input form-input--time" name="typical_bedtime" value="{{ profile.typical_bedtime }}">
+          </label>
+        </div>
+
+        <label class="form-field">
+          <span class="form-label">Breakfast Window</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" name="breakfast_window_start" value="{{ profile.breakfast_window_start }}">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" name="breakfast_window_end" value="{{ profile.breakfast_window_end }}">
+          </div>
+        </label>
+
+        <label class="form-field">
+          <span class="form-label">Lunch Window</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" name="lunch_window_start" value="{{ profile.lunch_window_start }}">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" name="lunch_window_end" value="{{ profile.lunch_window_end }}">
+          </div>
+        </label>
+
+        <label class="form-field">
+          <span class="form-label">Dinner Window</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" name="dinner_window_start" value="{{ profile.dinner_window_start }}">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" name="dinner_window_end" value="{{ profile.dinner_window_end }}">
+          </div>
+        </label>
+      </fieldset>
+
+      <!-- Category 2: Work Style -->
+      <fieldset class="settings-section">
+        <legend class="settings-section__title">Work Style</legend>
+
+        <div class="form-section-label">Chronotype</div>
+        <div class="card-row" data-settings-field="chronotype">
+          <button type="button" class="choice-card {% if profile.chronotype == 'morning' %}is-selected{% endif %}" data-value="morning">
+            <span class="choice-card__icon">☀️</span>
+            <span class="choice-card__label">Morning Person</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.chronotype == 'night_owl' %}is-selected{% endif %}" data-value="night_owl">
+            <span class="choice-card__icon">🌙</span>
+            <span class="choice-card__label">Night Owl</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.chronotype == 'flexible' %}is-selected{% endif %}" data-value="flexible">
+            <span class="choice-card__icon">🔄</span>
+            <span class="choice-card__label">Flexible</span>
+          </button>
+        </div>
+
+        <label class="form-field">
+          <span class="form-label">Peak Productivity Window</span>
+          <div class="form-row form-row--range">
+            <input type="time" class="form-input form-input--time form-input--sm" name="peak_start" value="{{ profile.peak_start }}">
+            <span class="form-range-dash">&mdash;</span>
+            <input type="time" class="form-input form-input--time form-input--sm" name="peak_end" value="{{ profile.peak_end }}">
+          </div>
+        </label>
+
+        <div class="form-section-label">Daily Burden</div>
+        <div class="card-row" data-settings-field="daily_burden">
+          <button type="button" class="choice-card {% if profile.daily_burden == 'light' %}is-selected{% endif %}" data-value="light">
+            <span class="choice-card__label">Light</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.daily_burden == 'medium' %}is-selected{% endif %}" data-value="medium">
+            <span class="choice-card__label">Medium</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.daily_burden == 'heavy' %}is-selected{% endif %}" data-value="heavy">
+            <span class="choice-card__label">Heavy</span>
+          </button>
+        </div>
+
+        <div class="form-section-label">Work Style</div>
+        <div class="tag-row" data-settings-field="work_style" data-multi>
+          {% set ws = profile.work_style_obj or ['solo'] %}
+          <button type="button" class="tag-chip {% if 'solo' in ws %}is-selected{% endif %}" data-value="solo">Deep Solo Work</button>
+          <button type="button" class="tag-chip {% if 'collaborative' in ws %}is-selected{% endif %}" data-value="collaborative">Collaborative</button>
+          <button type="button" class="tag-chip {% if 'mixed' in ws %}is-selected{% endif %}" data-value="mixed">Mixed</button>
+        </div>
+      </fieldset>
+
+      <!-- Category 3: Goals & Focus -->
+      <fieldset class="settings-section">
+        <legend class="settings-section__title">Goals &amp; Focus</legend>
+
+        <label class="form-field">
+          <span class="form-label">Primary Goal</span>
+          <input type="text" class="form-input" name="primary_goal" value="{{ profile.primary_goal }}"
+                 placeholder="e.g. Master machine learning engineering..." maxlength="200">
+        </label>
+
+        <div class="form-section-label">Interests</div>
+        <div class="tag-row" data-settings-field="interests" data-multi>
+          {% set interests = profile.interests_obj or [] %}
+          {% for tag in ['Python', 'Algorithms', 'System Design', 'Machine Learning', 'Math', 'Web Dev', 'DevOps', 'Data Science', 'Writing', 'Design'] %}
+          <button type="button" class="tag-chip {% if tag in interests %}is-selected{% endif %}" data-value="{{ tag }}">{{ tag }}</button>
+          {% endfor %}
+        </div>
+
+        <div class="form-section-label">AI Role</div>
+        <div class="tag-row" data-settings-field="ai_role" data-multi>
+          {% set ar = profile.ai_role_obj or ['general'] %}
+          <button type="button" class="tag-chip {% if 'general' in ar %}is-selected{% endif %}" data-value="general">General Assistant</button>
+          <button type="button" class="tag-chip {% if 'accountability' in ar %}is-selected{% endif %}" data-value="accountability">Accountability Partner</button>
+          <button type="button" class="tag-chip {% if 'wellness' in ar %}is-selected{% endif %}" data-value="wellness">Wellness Coach</button>
+          <button type="button" class="tag-chip {% if 'time_tracker' in ar %}is-selected{% endif %}" data-value="time_tracker">Time Tracker</button>
+        </div>
+
+        <div class="form-section-label">Secondary Goals</div>
+        <textarea class="form-input form-input--area" id="settings-secondary"
+                  placeholder="Build portfolio project, Read 2 papers/week..."
+                  rows="3" maxlength="500">{{ profile.secondary_goals_text or '' }}</textarea>
+      </fieldset>
+
+      <!-- Category 4: Habits & Wellness -->
+      <fieldset class="settings-section">
+        <legend class="settings-section__title">Habits &amp; Wellness</legend>
+
+        <div class="form-section-label">Exercise Goal</div>
+        <div class="card-row" data-settings-field="exercise_goal">
+          <button type="button" class="choice-card {% if profile.exercise_goal == 'none' %}is-selected{% endif %}" data-value="none">
+            <span class="choice-card__label">None</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.exercise_goal == 'light' %}is-selected{% endif %}" data-value="light">
+            <span class="choice-card__label">Light</span>
+          </button>
+          <button type="button" class="choice-card {% if profile.exercise_goal == 'regular' %}is-selected{% endif %}" data-value="regular">
+            <span class="choice-card__label">Regular</span>
+          </button>
+        </div>
+
+        <div class="form-section-label">Habits to Track</div>
+        <div class="tag-row" data-settings-field="tracked_habits" data-multi>
+          {% set th = profile.tracked_habits_obj or [] %}
+          <button type="button" class="tag-chip {% if 'meditation' in th %}is-selected{% endif %}" data-value="meditation">Meditation</button>
+          <button type="button" class="tag-chip {% if 'reading' in th %}is-selected{% endif %}" data-value="reading">Reading</button>
+          <button type="button" class="tag-chip {% if 'journaling' in th %}is-selected{% endif %}" data-value="journaling">Journaling</button>
+          <button type="button" class="tag-chip {% if 'exercise' in th %}is-selected{% endif %}" data-value="exercise">Exercise</button>
+          <button type="button" class="tag-chip {% if 'learning' in th %}is-selected{% endif %}" data-value="learning">Learning</button>
+        </div>
+
+        <label class="form-field">
+          <span class="form-label">Health Note (optional)</span>
+          <textarea class="form-input form-input--area" name="health_note"
+                    placeholder="Anything else I should know..."
+                    rows="2" maxlength="300">{{ profile.health_note or '' }}</textarea>
+        </label>
+      </fieldset>
+
+      <!-- Actions -->
+      <div class="settings-actions">
+        <a href="/" class="onboard-skip">Cancel</a>
+        <button type="submit" class="onboard-btn onboard-btn--next">Save Changes</button>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='scripts/onboarding.js') }}"></script>
+</body>
+</html>

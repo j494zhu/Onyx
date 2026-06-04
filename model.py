@@ -24,6 +24,50 @@ class User(UserMixin, db.Model):
 
     pomodoro_state = db.Column(db.Text, default=None)
 
+    profile = db.relationship('UserProfile', uselist=False, back_populates='user',
+                              cascade='all, delete-orphan')
+
+
+class UserProfile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True,
+                        nullable=False)
+
+    # ── Category 1: Daily Rhythm ──
+    typical_wakeup = db.Column(db.String(5), default='08:00')
+    typical_bedtime = db.Column(db.String(5), default='23:30')
+    breakfast_window_start = db.Column(db.String(5), default='07:00')
+    breakfast_window_end = db.Column(db.String(5), default='09:00')
+    lunch_window_start = db.Column(db.String(5), default='12:00')
+    lunch_window_end = db.Column(db.String(5), default='13:30')
+    dinner_window_start = db.Column(db.String(5), default='18:00')
+    dinner_window_end = db.Column(db.String(5), default='20:00')
+
+    # ── Category 2: Work Style ──
+    chronotype = db.Column(db.String(20), default='morning')
+    peak_start = db.Column(db.String(5), default='09:00')
+    peak_end = db.Column(db.String(5), default='12:00')
+    daily_burden = db.Column(db.String(10), default='medium')
+    work_style = db.Column(db.Text, default='["solo"]')  # JSON array
+
+    # ── Category 3: Goals & Focus ──
+    primary_goal = db.Column(db.Text, default='')
+    secondary_goals = db.Column(db.Text, default='[]')   # JSON array
+    interests = db.Column(db.Text, default='[]')          # JSON array
+    ai_role = db.Column(db.Text, default='["general"]')   # JSON array
+
+    # ── Category 4: Habits & Wellness ──
+    exercise_goal = db.Column(db.String(10), default='light')
+    tracked_habits = db.Column(db.Text, default='[]')     # JSON array
+    health_note = db.Column(db.Text, default='')
+
+    # ── Metadata ──
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now,
+                           onupdate=datetime.now)
+
+    user = db.relationship('User', back_populates='profile')
+
 
 class Expenses(db.Model):
     id = db.Column(db.Integer, primary_key=True)
