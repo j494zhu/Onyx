@@ -831,22 +831,66 @@ def stream_events():
     return response
 
 
+# ── Rate-limit helper (Redis sliding-window; falls back to session-only) ──
+RATE_LIMIT_PER_MINUTE = 3
+RATE_LIMIT_PER_HOUR = 20
+
+
+def _check_rate_limit(user_id):
+    """Return (is_limited: bool, message: str)."""
+    if redis_client is None:
+        return False, ""
+    try:
+        minute_key = f"rate:audit:{user_id}:minute"
+        hour_key = f"rate:audit:{user_id}:hour"
+
+        with redis_client.pipeline() as pipe:
+            pipe.incr(minute_key)
+            pipe.incr(hour_key)
+            pipe.expire(minute_key, 60, nx=True)
+            pipe.expire(hour_key, 3600, nx=True)
+            minute_count, hour_count, _, _ = pipe.execute()
+
+        if minute_count > RATE_LIMIT_PER_MINUTE:
+            return True, f"Rate limit: {RATE_LIMIT_PER_MINUTE}/minute. Slow down."
+        if hour_count > RATE_LIMIT_PER_HOUR:
+            return True, f"Rate limit: {RATE_LIMIT_PER_HOUR}/hour. Try again later."
+        return False, ""
+    except Exception:
+        return False, ""
+
+
 @app.route('/api/ai/audit', methods=['POST'])
 @login_required
 def ai_audit():
     # --- 1. Rate-limit logic ---
-    last_run = session.get('last_audit_time')
-    now = datetime.now()
-
-    if last_run:
-        last_time = datetime.fromisoformat(last_run)
-        if now - last_time < timedelta(seconds=10):
+    # 1a. Redis-based per-user limits (bypassed for admin)
+    if current_user.username != 'juncheng':
+        limited, limit_msg = _check_rate_limit(current_user.id)
+        if limited:
             return jsonify({
                 "score": 0,
                 "status": "red",
-                "insight": "Cool down! System recharging.",
-                "warning": "Rate limit exceeded. Wait 10s."
+                "insight": "You are scanning too quickly.",
+                "warning": limit_msg,
             }), 429
+
+        # 1b. Session-based burst cooldown
+        last_run = session.get('last_audit_time')
+        now = datetime.now()
+
+        if last_run:
+            last_time = datetime.fromisoformat(last_run)
+            if now - last_time < timedelta(seconds=15):
+                return jsonify({
+                    "score": 0,
+                    "status": "red",
+                    "insight": "Cool down! System recharging.",
+                    "warning": "Rate limit exceeded. Wait 15s."
+                }), 429
+    else:
+        last_run = session.get('last_audit_time')
+        now = datetime.now()
 
     session['last_audit_time'] = now.isoformat()
 
