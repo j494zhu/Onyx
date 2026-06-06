@@ -11,7 +11,7 @@ function saveNote(type, content, statusId) {
     const statusSpan = document.getElementById(statusId);
     statusSpan.innerText = "Saving...";
     
-    fetch('/save_notes', {
+    fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: type, content: content }),

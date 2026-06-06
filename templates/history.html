@@ -23,15 +23,15 @@
         <!-- ═══ CONTROLS ═══ -->
         <div class="nav-controls">
             <div class="mode-switch">
-                <a href="{{ url_for('history', mode='day', offset=0) }}"
+                <a href="{{ url_for('main.history', mode='day', offset=0) }}"
                    class="mode-btn {{ 'active' if mode == 'day' }}">◉ DAY</a>
-                <a href="{{ url_for('history', mode='week', offset=0) }}"
+                <a href="{{ url_for('main.history', mode='week', offset=0) }}"
                    class="mode-btn {{ 'active' if mode == 'week' }}">◎ WEEK</a>
             </div>
 
             <div class="time-nav">
                 {% if has_older %}
-                <a href="{{ url_for('history', mode=mode, offset=offset - 1) }}" class="nav-arrow">‹ PREV</a>
+                <a href="{{ url_for('main.history', mode=mode, offset=offset - 1) }}" class="nav-arrow">‹ PREV</a>
                 {% else %}
                 <span class="nav-arrow disabled">‹ PREV</span>
                 {% endif %}
@@ -44,7 +44,7 @@
                 </div>
 
                 {% if not next_disabled %}
-                <a href="{{ url_for('history', mode=mode, offset=offset + 1) }}" class="nav-arrow">NEXT ›</a>
+                <a href="{{ url_for('main.history', mode=mode, offset=offset + 1) }}" class="nav-arrow">NEXT ›</a>
                 {% else %}
                 <span class="nav-arrow disabled">NEXT ›</span>
                 {% endif %}
@@ -52,7 +52,7 @@
 
             {% if offset != 0 %}
             <div style="text-align: center; margin-top: 8px;">
-                <a href="{{ url_for('history', mode=mode, offset=0) }}" class="today-btn">⟳ TODAY</a>
+                <a href="{{ url_for('main.history', mode=mode, offset=0) }}" class="today-btn">⟳ TODAY</a>
             </div>
             {% endif %}
         </div>

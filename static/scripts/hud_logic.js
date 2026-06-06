@@ -110,7 +110,7 @@ async function submitRLHF(score) {
             // correction: "..." // 如果你以后做了文本框，可以在这里传修正意见
         };
 
-        const res = await fetch('/api/submit_alignment', {
+        const res = await fetch('/api/alignment', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)

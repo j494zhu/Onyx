@@ -90,7 +90,7 @@ function buildExpenseRow(expense) {
     <td class="col-time">${escapeHtml(expense.start_time)}</td>
     <td class="col-time">${escapeHtml(expense.end_time)}</td>
     <td class="col-del">
-      <form action="/delete/${expense.id}" method="POST" class="js-delete-form" data-expense-id="${expense.id}" style="margin:0;">
+      <form action="/api/expenses/${expense.id}" method="POST" class="js-delete-form" data-expense-id="${expense.id}" style="margin:0;">
         <button type="submit" class="btn-delete">×</button>
       </form>
     </td>
@@ -359,7 +359,7 @@ function saveNote(type, content, statusId) {
   const statusSpan = document.getElementById(statusId);
   if (statusSpan) statusSpan.innerText = 'Saving...';
 
-  fetch('/save_notes', {
+  fetch('/api/notes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, content }),
@@ -411,7 +411,7 @@ function saveTodos() {
   const statusSpan = document.getElementById('status-quick');
   if (statusSpan) statusSpan.innerText = 'Saving...';
 
-  fetch('/save_todos', {
+  fetch('/api/todos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ todos: todoState }),
@@ -982,7 +982,7 @@ async function submitRLHF(score) {
   dots.forEach((d, i) => d.classList.toggle('is-selected', i === scoreToIndex[score]));
 
   try {
-    const res = await fetch('/api/submit_alignment', {
+    const res = await fetch('/api/alignment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1030,7 +1030,7 @@ async function openWeeklyInsight() {
   document.getElementById('card-roast').innerText = 'Analyzing neural patterns...';
 
   try {
-    const res = await fetch('/api/generate_weekly_insight', {
+    const res = await fetch('/api/insights/weekly', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -1113,7 +1113,7 @@ async function submitInsightFeedback(score) {
 
   // Send to backend
   try {
-    await fetch('/api/submit_alignment', {
+    await fetch('/api/alignment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1160,7 +1160,7 @@ const _pomoSnapshot = () => ({
 
 const _saveToBackend = () => {
   const blob = new Blob([JSON.stringify(_pomoSnapshot())], { type: 'application/json' });
-  navigator.sendBeacon('/api/pomodoro/save', blob);
+  navigator.sendBeacon('/api/pomodoro', blob);
 };
 
 const _startAutosave = () => {
@@ -1220,7 +1220,7 @@ const _updatePomoButtonToPaused = () => {
 };
 
 const loadPomodoroState = () => {
-  fetch('/api/pomodoro/load')
+  fetch('/api/pomodoro')
     .then(r => r.json())
     .then(data => {
       if (!data.state) return;

@@ -40,7 +40,7 @@ function _pomoSnapshot() {
 
 function _saveToBackend() {
     const blob = new Blob([JSON.stringify(_pomoSnapshot())], { type: 'application/json' });
-    navigator.sendBeacon('/api/pomodoro/save', blob);
+    navigator.sendBeacon('/api/pomodoro', blob);
 }
 
 function _startAutosave() {
@@ -132,7 +132,7 @@ function _updatePomoButtonToPaused() {
 }
 
 function loadPomodoroState() {
-    fetch('/api/pomodoro/load')
+    fetch('/api/pomodoro')
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (data.state) {

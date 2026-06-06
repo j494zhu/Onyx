@@ -18,7 +18,7 @@ async function openWeeklyInsight() {
     
     try {
         // 2. 请求后端 API
-        const res = await fetch('/api/generate_weekly_insight', { 
+        const res = await fetch('/api/insights/weekly', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });

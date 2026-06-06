@@ -20,7 +20,7 @@
 
         if (seconds <= 0) {
             clearInterval(timer);
-            window.location.href = "{{ url_for('register')}}"
+            window.location.href = "{{ url_for('auth.register')}}"
         }
     }, 1000);
 </script>
