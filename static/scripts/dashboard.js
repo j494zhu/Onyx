@@ -1352,10 +1352,35 @@ function updateDots() {
   }
 }
 
+/* ── Side Panel Toggle ─────────────────────────────────────── */
+function toggleSidePanel() {
+  var grid = document.querySelector('.bento-grid');
+  var btn = document.getElementById('panelToggle');
+  if (!grid || !btn) return;
+  var isOpen = grid.classList.toggle('side-panel--open');
+  btn.setAttribute('aria-expanded', isOpen);
+  try {
+    localStorage.setItem('onyx-side-panel', isOpen ? '1' : '0');
+  } catch (e) {}
+}
+
 // Init pomodoro on load: restore backend state first, then autosave
 document.addEventListener('DOMContentLoaded', () => {
   loadPomodoroState();
   _startAutosave();
+
+  /* ── Side Panel toggle: restore saved state ── */
+  (function initSidePanel() {
+    var grid = document.querySelector('.bento-grid');
+    var btn = document.getElementById('panelToggle');
+    if (!grid || !btn) return;
+    try {
+      if (localStorage.getItem('onyx-side-panel') === '1') {
+        grid.classList.add('side-panel--open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    } catch (e) {}
+  })();
 
   /* ── Streak Check-in Toast auto-dismiss ── */
   const $toast = document.getElementById('streak-toast');

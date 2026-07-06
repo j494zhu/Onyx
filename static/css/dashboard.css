@@ -148,6 +148,7 @@ body {
 /* ─── BENTO GRID ────────────────────────────────────────────── */
 
 .bento-grid {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -156,12 +157,18 @@ body {
     "history  todo    viz     audit"
     "history  note    matrix  pomo"
     "archive  note    matrix  pomo";
-  grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+  grid-template-columns: 2.1fr 1.6fr 1fr 0fr;
   grid-template-rows: 160px 1fr 1fr 46px;
   gap: var(--gap);
   width: 100%;
   max-width: 1700px;
   margin: 0 auto;
+  transition: grid-template-columns 0.45s var(--ease);
+}
+
+/* Side-panel expanded: 4 columns */
+.bento-grid.side-panel--open {
+  grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
 }
 
 
@@ -222,6 +229,72 @@ body {
 .widget-neural   { grid-area: audit; }
 .widget-matrix   { grid-area: matrix; }
 .widget-pomo     { grid-area: pomo; }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDE PANEL COLLAPSE (4th column toggle)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 4th column widgets hidden by default */
+.widget-neural,
+.widget-pomo {
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease);
+}
+
+/* Visible when panel is open */
+.bento-grid.side-panel--open .widget-neural,
+.bento-grid.side-panel--open .widget-pomo {
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+/* ─── Toggle button (floating tab on the right edge) ─────────── */
+.panel-toggle {
+  position: absolute;
+  right: -1px;
+  top: 110px;
+  z-index: 20;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color var(--duration-fast) var(--ease),
+              background var(--duration-fast) var(--ease),
+              border-color var(--duration-fast) var(--ease),
+              right 0.45s var(--ease);
+  padding: 0;
+  font-family: inherit;
+}
+
+.panel-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  background: var(--surface-hover);
+}
+
+.panel-toggle__icon {
+  display: block;
+  width: 14px;
+  height: 20px;
+}
+
+/* Icon swap logic: default (panel closed) shows right-chevrons (>>),
+   open shows left-chevrons (<<) */
+.panel-toggle__icon--collapse { display: none; }
+.side-panel--open .panel-toggle__icon--expand  { display: none; }
+.side-panel--open .panel-toggle__icon--collapse { display: block; }
 
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1950,33 +2023,38 @@ body {
 /* Webkit (Chrome, Edge, Safari) */
 .history-scroll::-webkit-scrollbar,
 .note-textarea::-webkit-scrollbar,
-.hud-content-area::-webkit-scrollbar {
+.hud-content-area::-webkit-scrollbar,
+.todo-list::-webkit-scrollbar {
   width: 5px;
 }
 
 .history-scroll::-webkit-scrollbar-track,
 .note-textarea::-webkit-scrollbar-track,
-.hud-content-area::-webkit-scrollbar-track {
+.hud-content-area::-webkit-scrollbar-track,
+.todo-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .history-scroll::-webkit-scrollbar-thumb,
 .note-textarea::-webkit-scrollbar-thumb,
-.hud-content-area::-webkit-scrollbar-thumb {
+.hud-content-area::-webkit-scrollbar-thumb,
+.todo-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 10px;
 }
 
 .history-scroll::-webkit-scrollbar-thumb:hover,
 .note-textarea::-webkit-scrollbar-thumb:hover,
-.hud-content-area::-webkit-scrollbar-thumb:hover {
+.hud-content-area::-webkit-scrollbar-thumb:hover,
+.todo-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
 }
 
 /* Firefox */
 .history-scroll,
 .note-textarea,
-.hud-content-area {
+.hud-content-area,
+.todo-list {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }

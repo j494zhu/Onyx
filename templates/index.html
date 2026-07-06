@@ -93,6 +93,26 @@
   <!-- ═══ BENTO GRID ═══════════════════════════════════════ -->
   <main class="bento-grid">
 
+    <!-- ─── SIDE PANEL TOGGLE ─── -->
+    <button
+      id="panelToggle"
+      class="panel-toggle"
+      onclick="toggleSidePanel()"
+      aria-label="Toggle side panel"
+      aria-expanded="false"
+      title="Toggle side panel">
+      <!-- Right chevrons (expand panel) -->
+      <svg class="panel-toggle__icon panel-toggle__icon--expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="10,5 17,12 10,19"/>
+        <polyline points="3,5 10,12 3,19"/>
+      </svg>
+      <!-- Left chevrons (collapse panel) -->
+      <svg class="panel-toggle__icon panel-toggle__icon--collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="14,5 7,12 14,19"/>
+        <polyline points="21,5 14,12 21,19"/>
+      </svg>
+    </button>
+
     <!-- ─── SESSION (Clock + Input) ─── -->
     <section class="widget widget-session">
       <div class="session-clock">
