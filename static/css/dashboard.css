@@ -81,7 +81,12 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: red;
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(20, 35, 40, 0.5) 0%, rgba(8, 12, 18, 0.85) 100%),
+    url('../images/Obsidian/4k-forest-7sfd6znw2ry6hnlt.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--text-primary);
   height: 100vh;
   overflow: hidden;
