@@ -9,7 +9,7 @@ from flask import current_app
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 
-from model import db, Expenses, AlignmentSignal
+from model import db, TimeEntry, AlignmentSignal
 
 from routes.common import (
     get_logical_date, load_todos, todos_to_text,
@@ -57,11 +57,11 @@ def ai_audit():
     client_time = data.get('client_time')
 
     logical_date = get_logical_date(datetime.now())
-    today_logs = Expenses.query.filter(
-        Expenses.user_id == current_user.id,
+    today_logs = TimeEntry.query.filter(
+        TimeEntry.user_id == current_user.id,
         or_(
-            Expenses.archive_date == logical_date,
-            Expenses.is_archived == False
+            TimeEntry.archive_date == logical_date,
+            TimeEntry.is_archived == False
         )
     ).all()
 
@@ -161,7 +161,7 @@ def ai_audit():
 @bp.route('/api/visualize', methods=['POST'])
 @login_required
 def visualize_data():
-    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+    active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
 
     if not active_items:
         return jsonify({
@@ -173,10 +173,10 @@ def visualize_data():
 
     existing_tags = []
     try:
-        recent_tags_query = db.session.query(Expenses.category).filter(
-            Expenses.user_id == current_user.id,
-            Expenses.category != "Uncategorized",
-            Expenses.category != None
+        recent_tags_query = db.session.query(TimeEntry.category).filter(
+            TimeEntry.user_id == current_user.id,
+            TimeEntry.category != "Uncategorized",
+            TimeEntry.category != None
         ).distinct().limit(20).all()
         existing_tags = [row[0] for row in recent_tags_query if row[0]]
     except Exception:
@@ -260,11 +260,11 @@ def generate_weekly_insight():
     end_date = date.today()
     start_date = end_date - timedelta(days=6)
 
-    logs = Expenses.query.filter(
-        Expenses.user_id == current_user.id,
-        Expenses.is_archived == True,
-        Expenses.archive_date >= start_date,
-        Expenses.archive_date <= end_date
+    logs = TimeEntry.query.filter(
+        TimeEntry.user_id == current_user.id,
+        TimeEntry.is_archived == True,
+        TimeEntry.archive_date >= start_date,
+        TimeEntry.archive_date <= end_date
     ).all()
 
     if len(logs) < 1:

@@ -5,11 +5,11 @@ from itertools import groupby
 
 from flask import Blueprint, render_template, request, redirect, jsonify
 from flask_login import login_required, current_user
-from model import db, User, Expenses, AlignmentSignal
+from model import db, User, TimeEntry, AlignmentSignal
 
 from routes.common import (
-    serialize_expense, is_ajax_request, publish_user_event,
-    EVENT_EXPENSE_CREATED, EVENT_EXPENSE_DELETED,
+    serialize_entry, is_ajax_request, publish_user_event,
+    EVENT_ENTRY_CREATED, EVENT_ENTRY_DELETED,
     load_todos, migrate_quick_note_to_todos, get_logical_date,
     load_user_profile,
 )
@@ -31,7 +31,7 @@ def index():
         logical_date = get_logical_date(datetime.now())
 
         try:
-            item = Expenses(
+            item = TimeEntry(
                 desc=item_desc,
                 start_time=item_start,
                 end_time=item_end,
@@ -43,11 +43,11 @@ def index():
             update_user_streak(current_user, logical_date)
             db.session.commit()
 
-            payload = serialize_expense(item)
-            publish_user_event(current_user.id, EVENT_EXPENSE_CREATED, payload)
+            payload = serialize_entry(item)
+            publish_user_event(current_user.id, EVENT_ENTRY_CREATED, payload)
 
             if is_ajax_request(request):
-                return jsonify({'status': 'success', 'expense': payload})
+                return jsonify({'status': 'success', 'entry': payload})
             return redirect('/')
         except Exception as e:
             if is_ajax_request(request):
@@ -58,7 +58,7 @@ def index():
         now = datetime.now()
         current_logical_date = get_logical_date(now)
 
-        active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+        active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
 
         items_to_archive = False
         for item in active_items:
@@ -78,9 +78,9 @@ def index():
         if current_user.streak != old_streak:
             db.session.commit()
 
-        expenses = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).order_by(Expenses.timestamp.desc()).all()
+        entries = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).order_by(TimeEntry.timestamp.desc()).all()
 
-        total_h, deep_h = calculate_stats_from_logs(expenses)
+        total_h, deep_h = calculate_stats_from_logs(entries)
 
         rlhf_count = AlignmentSignal.query.filter_by(user_id=current_user.id).count()
 
@@ -101,7 +101,7 @@ def index():
 
         return render_template(
             'index.html',
-            expenses=expenses,
+            entries=entries,
             total_hours=total_h,
             deep_hours=deep_h,
             rlhf_count=rlhf_count,
@@ -117,7 +117,7 @@ def index():
 @bp.route('/end_day', methods=['POST'])
 @login_required
 def end_day():
-    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+    active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
 
     current_logical_date = get_logical_date(datetime.now())
 
@@ -132,17 +132,17 @@ def end_day():
     return redirect('/')
 
 
-@bp.route('/api/expenses/<int:id>', methods=['POST'])
+@bp.route('/api/entries/<int:id>', methods=['POST'])
 @login_required
 def delete(id):
-    del_item = Expenses.query.get_or_404(id)
+    del_item = TimeEntry.query.get_or_404(id)
     if (del_item.user_id != current_user.id):
         return "Unauthorized"
     try:
         deleted_id = del_item.id
         db.session.delete(del_item)
         db.session.commit()
-        publish_user_event(current_user.id, EVENT_EXPENSE_DELETED, {'id': deleted_id})
+        publish_user_event(current_user.id, EVENT_ENTRY_DELETED, {'id': deleted_id})
         if is_ajax_request(request):
             return jsonify({'status': 'success', 'id': deleted_id})
         return redirect('/')
@@ -170,15 +170,15 @@ def history():
         end_date = start_date
         label = start_date.strftime('%Y-%m-%d (%A)')
 
-    items = Expenses.query.filter(
-        Expenses.user_id == current_user.id,
-        Expenses.is_archived == True,
-        Expenses.archive_date.isnot(None),
-        Expenses.archive_date >= start_date,
-        Expenses.archive_date <= end_date,
+    items = TimeEntry.query.filter(
+        TimeEntry.user_id == current_user.id,
+        TimeEntry.is_archived == True,
+        TimeEntry.archive_date.isnot(None),
+        TimeEntry.archive_date >= start_date,
+        TimeEntry.archive_date <= end_date,
     ).order_by(
-        Expenses.archive_date.desc(),
-        Expenses.timestamp.desc()
+        TimeEntry.archive_date.desc(),
+        TimeEntry.timestamp.desc()
     ).all()
 
     grouped_history = OrderedDict()
@@ -201,11 +201,11 @@ def history():
         next_disabled = (start_date + timedelta(days=1)) > today
 
     prev_end = start_date - timedelta(days=1)
-    has_older = Expenses.query.filter(
-        Expenses.user_id == current_user.id,
-        Expenses.is_archived == True,
-        Expenses.archive_date.isnot(None),
-        Expenses.archive_date <= prev_end,
+    has_older = TimeEntry.query.filter(
+        TimeEntry.user_id == current_user.id,
+        TimeEntry.is_archived == True,
+        TimeEntry.archive_date.isnot(None),
+        TimeEntry.archive_date <= prev_end,
     ).first() is not None
 
     return render_template(

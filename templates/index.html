@@ -163,20 +163,20 @@
             </tr>
           </thead>
           <tbody id="history-table-body">
-            {% for item in expenses %}
-            <tr id="expense-row-{{ item.id }}" data-expense-id="{{ item.id }}">
+            {% for item in entries %}
+            <tr id="entry-row-{{ item.id }}" data-entry-id="{{ item.id }}">
               <td class="col-index">{{ loop.index }}</td>
               <td class="col-desc">{{ item.desc }}</td>
               <td class="col-time">{{ item.start_time }}</td>
               <td class="col-time">{{ item.end_time }}</td>
               <td class="col-del">
-                <form action="/delete/{{ item.id }}" method="POST" class="js-delete-form" data-expense-id="{{ item.id }}" style="margin:0;">
+                <form action="/api/entries/{{ item.id }}" method="POST" class="js-delete-form" data-entry-id="{{ item.id }}" style="margin:0;">
                   <button type="submit" class="btn-delete">×</button>
                 </form>
               </td>
             </tr>
             {% endfor %}
-            {% if expenses|length == 0 %}
+            {% if entries|length == 0 %}
             <tr id="history-empty-row">
               <td colspan="5" class="history-empty">— No Records Yet —</td>
             </tr>

@@ -12,7 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date, timezone
 
 from sqlalchemy import text as sa_text
-from model import db, User, Expenses, AlignmentSignal, UserProfile
+from model import db, User, TimeEntry, AlignmentSignal, UserProfile
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -131,7 +131,7 @@ def initialize_database():
 initialize_database()
 
 # --- Register Blueprints ---
-from routes import auth_bp, main_bp, profile_bp, notes_bp, sse_bp, ai_bp, data_bp, secret_bp
+from routes import auth_bp, main_bp, profile_bp, notes_bp, sse_bp, ai_bp, data_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(main_bp)
@@ -140,7 +140,6 @@ app.register_blueprint(notes_bp)
 app.register_blueprint(sse_bp)
 app.register_blueprint(ai_bp)
 app.register_blueprint(data_bp)
-app.register_blueprint(secret_bp)
 
 # --- CLI command ---
 @app.cli.command("count-users")

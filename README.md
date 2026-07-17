@@ -54,7 +54,7 @@ Users log time-based activities with a description, start time, and end time. Ea
 - **Manual**: fill in description, start, and end time fields, then hit "Confirm Log".
 - **One-click Recorder**: press "Start Session" to auto-capture the current time, press "Stop & Log" to auto-capture the end time, then describe the activity and confirm.
 
-Backend: `app.py:304-339` — `POST /` creates a new `Expenses` record and publishes an SSE `expense_created` event.
+Backend: `routes/main.py` — `POST /` creates a new `TimeEntry` record and publishes an SSE `entry_created` event.
 
 ---
 
@@ -187,7 +187,7 @@ The "Logged" and "Deep Work" cells refresh automatically whenever a session is c
 
 1. **Context retrieval**: fetches up to 20 recently-used category tags from the DB.
 2. **AI taxonomy**: DeepSeek assigns each entry a single category (1-2 words).
-3. **Persist**: the assigned category is saved back to `Expenses.category`.
+3. **Persist**: the assigned category is saved back to `TimeEntry.category`.
 4. **Render**: Chart.js renders a Donut or Bar chart with the distribution.
 
 **Chart features:**
@@ -233,22 +233,22 @@ Prints the total number of registered users. Implemented at `app.py:1078-1086`.
 | `GET` | `/register` | | Registration page |
 | `POST` | `/register` | | Create new user account |
 | `GET` | `/logout` | ✓ | Log out current user |
-| `POST` | `/delete/<id>` | ✓ | Delete a session entry |
-| `POST` | `/save_notes` | ✓ | Save notebook or quick note text |
-| `POST` | `/save_todos` | ✓ | Persist To-Do checklist |
+| `POST` | `/api/entries/<id>` | ✓ | Delete a time entry |
+| `POST` | `/api/notes` | ✓ | Save notebook or quick note text |
+| `POST` | `/api/todos` | ✓ | Persist To-Do checklist |
 | `GET` | `/api/events` | ✓ | SSE stream for real-time sync |
 | `POST` | `/api/ai/audit` | ✓ | Run daily Neural Audit (DeepSeek) |
 | `POST` | `/api/visualize` | ✓ | AI-powered session categorization + chart data |
 | `GET` | `/api/stats` | ✓ | Lightweight tracked-time stats (no LLM) |
-| `POST` | `/api/submit_alignment` | ✓ | Submit RLHF feedback |
-| `POST` | `/api/generate_weekly_insight` | ✓ | Generate Weekly Intel report (DeepSeek) |
-| `POST` | `/api/pomodoro/save` | ✓ | Persist pomodoro timer state |
-| `GET` | `/api/pomodoro/load` | ✓ | Restore pomodoro timer state |
-| `GET` | `/api/key/juncheng220680` | | Hardcoded API key: data export for user 'juncheng' |
+| `POST` | `/api/alignment` | ✓ | Submit RLHF feedback |
+| `POST` | `/api/insights/weekly` | ✓ | Generate Weekly Intel report (DeepSeek) |
+| `POST` | `/api/pomodoro` | ✓ | Persist pomodoro timer state |
+| `GET` | `/api/pomodoro` | ✓ | Restore pomodoro timer state |
+| `GET`/`POST` | `/onboarding`, `/settings`, `/api/profile` | ✓ | User profile pages / API |
 
 ### Rate Limiting
 
-The Neural Audit endpoint (`/api/ai/audit`) enforces a **10-second cooldown** between consecutive calls per user session. Exceeding it returns HTTP 429.
+The Neural Audit endpoint (`/api/ai/audit`) enforces a **15-second cooldown** between consecutive calls per user session, plus Redis-backed limits of 3/minute and 20/hour per user. Exceeding either returns HTTP 429.
 
 ---
 
@@ -267,7 +267,10 @@ The Neural Audit endpoint (`/api/ai/audit`) enforces a **10-second cooldown** be
 | `last_check_in` | String(20) | ISO date of last activity |
 | `pomodoro_state` | Text | JSON state object |
 
-### `Expenses`
+### `TimeEntry`
+
+Maps to the legacy database table `expenses` (kept for data compatibility; the project has no migration framework).
+
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | Integer PK | |
@@ -443,8 +446,8 @@ Onyx supports real-time cross-tab and cross-device synchronization for the same 
 
 | Event | Payload | Effect on receiving client |
 |-------|---------|---------------------------|
-| `expense_created` | `{id, desc, start_time, end_time, timestamp}` | Prepends row to history table |
-| `expense_deleted` | `{id}` | Removes row from history table |
+| `entry_created` | `{id, desc, start_time, end_time, timestamp}` | Prepends row to history table |
+| `entry_deleted` | `{id}` | Removes row from history table |
 | `notebook_updated` | `{type, content, saved_at}` | Updates textarea content |
 | `todos_updated` | `{todos, saved_at}` | Re-renders To-Do checklist |
 | `heartbeat` | `{ts}` | No-op (health check) |
@@ -583,7 +586,7 @@ docker compose up --build
 ```
 Onyx/
 ├── app.py                  # Flask application: routes, SSE, DB init
-├── model.py                # SQLAlchemy models: User, Expenses, AlignmentSignal
+├── model.py                # SQLAlchemy models: User, TimeEntry, AlignmentSignal
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Multi-service Docker deployment
 ├── requirements.txt        # Python dependencies

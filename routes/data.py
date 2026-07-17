@@ -3,7 +3,7 @@ import time
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from model import db, Expenses, AlignmentSignal
+from model import db, TimeEntry, AlignmentSignal
 from services.stats import calculate_stats_from_logs, calculate_duration
 
 bp = Blueprint('data', __name__)
@@ -12,7 +12,7 @@ bp = Blueprint('data', __name__)
 @bp.route('/api/stats', methods=['GET'])
 @login_required
 def get_stats():
-    active_items = Expenses.query.filter_by(user_id=current_user.id, is_archived=False).all()
+    active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
     total_h, deep_h = calculate_stats_from_logs(active_items)
     total_minutes = sum(calculate_duration(item.start_time, item.end_time) for item in active_items)
     return jsonify({

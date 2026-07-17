@@ -11,7 +11,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
-    expenses = db.relationship('Expenses', backref='user', lazy=True)
+    time_entries = db.relationship('TimeEntry', backref='user', lazy=True)
 
     quick_note = db.Column(db.Text, default="")
     notebook = db.Column(db.Text, default="")
@@ -69,7 +69,10 @@ class UserProfile(db.Model):
     user = db.relationship('User', back_populates='profile')
 
 
-class Expenses(db.Model):
+class TimeEntry(db.Model):
+    # 表名保留历史名 'expenses'：生产库已有数据且项目没有迁移框架，只重命名代码层的类名
+    __tablename__ = 'expenses'
+
     id = db.Column(db.Integer, primary_key=True)
     desc = db.Column(db.String, nullable=False)
     start_time = db.Column(db.String, nullable=False)

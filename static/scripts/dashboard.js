@@ -51,10 +51,10 @@ function getHistoryBody() {
   return document.getElementById('history-table-body');
 }
 
-function reindexExpenseRows() {
+function reindexEntryRows() {
   const tbody = getHistoryBody();
   if (!tbody) return;
-  const rows = tbody.querySelectorAll('tr[data-expense-id]');
+  const rows = tbody.querySelectorAll('tr[data-entry-id]');
   rows.forEach((row, idx) => {
     const indexCell = row.querySelector('.col-index');
     if (indexCell) indexCell.textContent = String(idx + 1);
@@ -65,7 +65,7 @@ function ensureEmptyRowState() {
   const tbody = getHistoryBody();
   if (!tbody) return;
 
-  const hasRows = tbody.querySelector('tr[data-expense-id]') !== null;
+  const hasRows = tbody.querySelector('tr[data-entry-id]') !== null;
   const emptyRow = document.getElementById('history-empty-row');
 
   if (hasRows && emptyRow) {
@@ -80,17 +80,17 @@ function ensureEmptyRowState() {
   }
 }
 
-function buildExpenseRow(expense) {
+function buildEntryRow(entry) {
   const tr = document.createElement('tr');
-  tr.id = `expense-row-${expense.id}`;
-  tr.dataset.expenseId = String(expense.id);
+  tr.id = `entry-row-${entry.id}`;
+  tr.dataset.entryId = String(entry.id);
   tr.innerHTML = `
     <td class="col-index">1</td>
-    <td class="col-desc">${escapeHtml(expense.desc)}</td>
-    <td class="col-time">${escapeHtml(expense.start_time)}</td>
-    <td class="col-time">${escapeHtml(expense.end_time)}</td>
+    <td class="col-desc">${escapeHtml(entry.desc)}</td>
+    <td class="col-time">${escapeHtml(entry.start_time)}</td>
+    <td class="col-time">${escapeHtml(entry.end_time)}</td>
     <td class="col-del">
-      <form action="/api/expenses/${expense.id}" method="POST" class="js-delete-form" data-expense-id="${expense.id}" style="margin:0;">
+      <form action="/api/entries/${entry.id}" method="POST" class="js-delete-form" data-entry-id="${entry.id}" style="margin:0;">
         <button type="submit" class="btn-delete">×</button>
       </form>
     </td>
@@ -120,29 +120,29 @@ async function refreshTrackedStats() {
   }
 }
 
-function appendExpenseRow(expense) {
-  if (!expense || !expense.id) return;
+function appendEntryRow(entry) {
+  if (!entry || !entry.id) return;
   const tbody = getHistoryBody();
   if (!tbody) return;
 
-  const existing = tbody.querySelector(`tr[data-expense-id="${expense.id}"]`);
+  const existing = tbody.querySelector(`tr[data-entry-id="${entry.id}"]`);
   if (existing) return;
 
   ensureEmptyRowState();
-  const row = buildExpenseRow(expense);
+  const row = buildEntryRow(entry);
   tbody.prepend(row);
-  reindexExpenseRows();
+  reindexEntryRows();
   refreshTrackedStats();
 }
 
-function removeExpenseRowById(expenseId) {
+function removeEntryRowById(entryId) {
   const tbody = getHistoryBody();
   if (!tbody) return;
 
-  const row = tbody.querySelector(`tr[data-expense-id="${expenseId}"]`);
+  const row = tbody.querySelector(`tr[data-entry-id="${entryId}"]`);
   if (row) row.remove();
 
-  reindexExpenseRows();
+  reindexEntryRows();
   ensureEmptyRowState();
   if (row) refreshTrackedStats();
 }
@@ -188,7 +188,7 @@ function applyNotebookUpdate(payload) {
   }
 }
 
-function setupAjaxExpenseActions() {
+function setupAjaxEntryActions() {
   const form = document.getElementById('log-form');
   const tbody = getHistoryBody();
   if (!form || !tbody) return;
@@ -198,8 +198,8 @@ function setupAjaxExpenseActions() {
 
     try {
       const data = await postFormJson(form.action, new FormData(form));
-      if (data && data.expense) {
-        appendExpenseRow(data.expense);
+      if (data && data.entry) {
+        appendEntryRow(data.entry);
       }
 
       const submitBtn = document.getElementById('submit-btn');
@@ -231,7 +231,7 @@ function setupAjaxExpenseActions() {
     try {
       const data = await postFormJson(deleteForm.action, new FormData(deleteForm));
       if (data && data.id) {
-        removeExpenseRowById(String(data.id));
+        removeEntryRowById(String(data.id));
       }
     } catch (e) {
       deleteForm.submit();
@@ -244,22 +244,22 @@ function setupEventStream() {
 
   const source = new EventSource('/api/events');
 
-  source.addEventListener('expense_created', (event) => {
+  source.addEventListener('entry_created', (event) => {
     try {
-      appendExpenseRow(JSON.parse(event.data));
+      appendEntryRow(JSON.parse(event.data));
     } catch (e) {
-      console.error('Failed to parse expense_created event', e);
+      console.error('Failed to parse entry_created event', e);
     }
   });
 
-  source.addEventListener('expense_deleted', (event) => {
+  source.addEventListener('entry_deleted', (event) => {
     try {
       const payload = JSON.parse(event.data);
       if (payload && payload.id != null) {
-        removeExpenseRowById(String(payload.id));
+        removeEntryRowById(String(payload.id));
       }
     } catch (e) {
-      console.error('Failed to parse expense_deleted event', e);
+      console.error('Failed to parse entry_deleted event', e);
     }
   });
 
@@ -374,7 +374,7 @@ function saveNote(type, content, statusId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  setupAjaxExpenseActions();
+  setupAjaxEntryActions();
   setupEventStream();
   ensureEmptyRowState();
   setupTodoList();

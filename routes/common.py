@@ -5,15 +5,15 @@ from flask import current_app
 from model import db, UserProfile
 
 # --- Event constants ---
-EVENT_EXPENSE_CREATED = 'expense_created'
-EVENT_EXPENSE_DELETED = 'expense_deleted'
+EVENT_ENTRY_CREATED = 'entry_created'
+EVENT_ENTRY_DELETED = 'entry_deleted'
 EVENT_NOTEBOOK_UPDATED = 'notebook_updated'
 EVENT_TODOS_UPDATED = 'todos_updated'
 EVENT_HEARTBEAT = 'heartbeat'
 
 EVENT_PAYLOAD_SCHEMA = {
-    EVENT_EXPENSE_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
-    EVENT_EXPENSE_DELETED: ('id',),
+    EVENT_ENTRY_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
+    EVENT_ENTRY_DELETED: ('id',),
     EVENT_NOTEBOOK_UPDATED: ('type', 'content', 'saved_at'),
     EVENT_TODOS_UPDATED: ('todos', 'saved_at'),
 }
@@ -21,13 +21,13 @@ EVENT_PAYLOAD_SCHEMA = {
 SSE_EVENT_NAMES = set(EVENT_PAYLOAD_SCHEMA.keys())
 
 
-def serialize_expense(expense):
+def serialize_entry(entry):
     return {
-        'id': expense.id,
-        'desc': expense.desc,
-        'start_time': expense.start_time,
-        'end_time': expense.end_time,
-        'timestamp': expense.timestamp.isoformat() if expense.timestamp else None,
+        'id': entry.id,
+        'desc': entry.desc,
+        'start_time': entry.start_time,
+        'end_time': entry.end_time,
+        'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
     }
 
 
