@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse 图标调参台</title>
+<link id="fav" rel="icon" type="image/svg+xml" href="">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: system-ui, "Segoe UI", sans-serif; background: #f2f1ee; color: #232019; padding: 28px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .lede { color: #6d675c; font-size: 13.5px; margin-bottom: 20px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: #fff; border: 1px solid #e0ddd5; border-radius: 12px; padding: 18px; }
+  .panel h2 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #6d675c; margin-bottom: 12px; }
+  .bases { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bases button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid #d8d4ca;
+                  background: #faf9f6; cursor: pointer; }
+  .bases button.on { background: #232019; color: #fff; border-color: #232019; }
+  .ctl { margin-bottom: 14px; }
+  .ctl label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .ctl label b { font-weight: 600; }
+  .ctl label span { color: #6d675c; font-variant-numeric: tabular-nums; }
+  .ctl input[type=range] { width: 100%; }
+  .colors { display: flex; gap: 12px; }
+  .colors div { flex: 1; }
+  .colors input[type=color] { width: 100%; height: 34px; border: 1px solid #d8d4ca; border-radius: 6px;
+                              background: #fff; padding: 2px; cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 14px; }
+  .previews { display: flex; flex-direction: column; gap: 16px; }
+  .big { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .cell small { color: #6d675c; font-size: 11px; font-family: ui-monospace, Consolas, monospace; }
+  .strips { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .strip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; }
+  .strip.light { background: #f0f1f3; border: 1px solid #d9dce0; color: #3c4043; }
+  .strip.dark  { background: #35363a; color: #e8eaed; }
+  .out textarea { width: 100%; height: 88px; font: 12px ui-monospace, Consolas, monospace;
+                  border: 1px solid #d8d4ca; border-radius: 8px; padding: 8px; resize: vertical; }
+  .out .row { display: flex; gap: 10px; margin-top: 8px; }
+  .out button { font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 8px;
+                border: 1px solid #d8d4ca; background: #faf9f6; cursor: pointer; }
+  .hint { font-size: 12px; color: #6d675c; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pulse 图标调参台</h1>
+  <p class="lede">选基准 → 拖参数。本页标签页的 favicon 会实时替换成当前设计（需通过 http 访问）。
+  参数公式见同目录 README.md；定稿后把下方 JSON 交给 agent 即可复现（对应 <code>make_assets.py</code>）。</p>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>基准模板</h2>
+      <div class="bases" id="bases"></div>
+
+      <h2>参数</h2>
+      <div class="ctl">
+        <label><b>阴影宽度</b><span id="v-shadow"></span></label>
+        <input type="range" id="shadow" min="0" max="40" step="0.5">
+      </div>
+      <div class="ctl">
+        <label><b>线条粗细</b><span id="v-stroke"></span></label>
+        <input type="range" id="stroke" min="3" max="12" step="0.5">
+      </div>
+      <div class="ctl">
+        <label><b>右侧曲线长度</b><span id="v-trim"></span></label>
+        <input type="range" id="trim" min="0.55" max="1" step="0.01">
+      </div>
+      <div class="ctl colors">
+        <div><label><b>起点色</b></label><input type="color" id="c0"></div>
+        <div><label><b>终点色</b></label><input type="color" id="c1"></div>
+      </div>
+      <div class="check"><input type="checkbox" id="haloCk"><label for="haloCk">白色光晕</label></div>
+    </div>
+
+    <div class="previews">
+      <div class="panel">
+        <h2>预览</h2>
+        <div class="big">
+          <div class="cell"><span id="p160"></span><small>160</small></div>
+          <div class="cell"><span id="p96"></span><small>96</small></div>
+          <div class="cell"><span id="p48"></span><small>48</small></div>
+          <div class="cell"><span id="p32"></span><small>32</small></div>
+          <div class="cell"><span id="p16"></span><small>16</small></div>
+        </div>
+        <div class="strips" style="margin-top:14px">
+          <span class="strip light"><span id="t1"></span>Onyx — Dashboard</span>
+          <span class="strip dark"><span id="t2"></span>Onyx — Dashboard</span>
+        </div>
+      </div>
+      <div class="panel out">
+        <h2>当前参数（交给 agent 复现）</h2>
+        <textarea id="json" readonly></textarea>
+        <div class="row">
+          <button id="copyJson">复制 JSON</button>
+          <button id="copySvg">复制 SVG</button>
+          <button id="dl">下载 SVG</button>
+        </div>
+        <p class="hint">复现命令：<code id="cmd"></code></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ─── 几何常量（与 icon_svg.py 一致）─────────────────────────
+const T = 60, ANG = 75;
+const ECHO_W = [1.53, 2.21, 1.275, 1.445, 1.02, 0.935, 0.765, 0.68];
+const ECHO_SHADES = ["#f3f1ee", "#f6f4f1", "#faf8f6", "#fcfbfa"];
+const SOLID = "#f1efec";
+const SEG1 = [[9,36],[17,16],[25,16],[32,34]];
+const SEG2 = [[32,34],[38,50],[46,50],[55,24]];
+
+const PRESETS = {
+  A1:   { start:"#ffcf3f", end:"#ff4d3d", stroke:8, shadow:0,      kind:"single", halo:false, grid:false, trim:1 },
+  A6:   { start:"#ffe100", end:"#ff4d3d", stroke:8, shadow:64/3,   kind:"echo",   halo:true,  grid:false, trim:1 },
+  A7:   { start:"#ffe100", end:"#ff4d3d", stroke:8, shadow:26,     kind:"echo",   halo:true,  grid:false, trim:1 },
+  GRID: { start:"#6bb388", end:"#b7c95f", stroke:8, shadow:0,      kind:"single", halo:false, grid:true,  trim:1,
+          tile:"#f8faf3", border:"#dfe8d5" },
+};
+
+let base = "A6";
+let p = { ...PRESETS[base] };
+
+// ─── SVG 构建 ────────────────────────────────────────────────
+const lerp = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+
+function trimSeg2(t) {
+  const [p0,p1,p2,p3] = SEG2;
+  const q1=lerp(p0,p1,t), q2=lerp(p1,p2,t), q3=lerp(p2,p3,t);
+  const r1=lerp(q1,q2,t), r2=lerp(q2,q3,t);
+  return [p0, q1, r1, lerp(r1,r2,t)];
+}
+const f2 = n => (Math.round(n*100)/100).toString();
+
+function wavePath(trim) {
+  const [a,b,c,d] = SEG1;
+  const [, c1, c2, end] = trimSeg2(trim);
+  return {
+    d: `M ${a[0]} ${a[1]} C ${b[0]} ${b[1]}, ${c[0]} ${c[1]}, ${d[0]} ${d[1]} ` +
+       `C ${f2(c1[0])} ${f2(c1[1])}, ${f2(c2[0])} ${f2(c2[1])}, ${f2(end[0])} ${f2(end[1])}`,
+    end,
+  };
+}
+
+function band(xl, xr, fill) {
+  const dx = Math.cos(ANG*Math.PI/180), dy = -Math.sin(ANG*Math.PI/180);
+  const pts = [[xl+T*dx,32+T*dy],[xr+T*dx,32+T*dy],[xr-T*dx,32-T*dy],[xl-T*dx,32-T*dy]]
+    .map(q => `${f2(q[0])},${f2(q[1])}`).join(" ");
+  return `<polygon points='${pts}' fill='${fill}' clip-path='url(#tile)'/>`;
+}
+
+function shadowSvg() {
+  const b = p.shadow;
+  if (b <= 0) return "";
+  if (p.kind === "single") return band(-30, b, "#f4f2ef");
+  const total = ECHO_W.reduce((s,w) => s+w, 0);
+  let ws = ECHO_W, x0 = b - total;
+  if (x0 < 0) { ws = ECHO_W.map(w => w*b/total); x0 = 0; }
+  let out = band(-30, x0, SOLID), x = x0, si = 0;
+  ws.forEach((w, i) => {
+    if (i % 2 === 1) { out += band(x, x+w, ECHO_SHADES[si]); si++; }
+    x += w;
+  });
+  return out;
+}
+
+function gridSvg() {
+  if (!p.grid) return "";
+  let lines = "";
+  for (let v = -30; v < 95; v += 10)
+    lines += `<line x1='${v}' y1='-30' x2='${v}' y2='94'/><line x1='-30' y1='${v}' x2='94' y2='${v}'/>`;
+  return `<g transform='rotate(-8 32 32)' stroke='#dbe5d2' stroke-width='0.8' clip-path='url(#tile)'>${lines}</g>`;
+}
+
+function buildSvg() {
+  const { d, end } = wavePath(p.trim);
+  const tile = p.tile || "#ffffff", border = p.border || "#e4e7ea";
+  const haloSvg = p.halo
+    ? `<linearGradient id='og' x1='0' y1='0' x2='1' y2='0'>
+<stop offset='0' stop-color='#ffffff'/><stop offset='0.45' stop-color='#ffffff'/>
+<stop offset='0.65' stop-color='#ffffff' stop-opacity='0'/></linearGradient>
+<path d='${d}' fill='none' stroke='url(#og)' stroke-width='${p.stroke+2.5}' stroke-linecap='round'/>`
+    : "";
+  return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='0'>
+<stop offset='0' stop-color='${p.start}'/><stop offset='1' stop-color='${p.end}'/></linearGradient>
+<clipPath id='tile'><rect width='64' height='64' rx='14'/></clipPath></defs>
+<rect width='64' height='64' rx='14' fill='${tile}'/>
+${gridSvg()}${shadowSvg()}
+<rect x='0.75' y='0.75' width='62.5' height='62.5' rx='13.25' fill='none' stroke='${border}' stroke-width='1.5'/>
+${haloSvg}
+<path d='${d}' fill='none' stroke='url(#g)' stroke-width='${p.stroke}' stroke-linecap='round'/>
+<circle cx='${f2(end[0])}' cy='${f2(end[1])}' r='${p.stroke/2}' fill='${p.end}'/>
+</svg>`;
+}
+
+// ─── UI ──────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const basesEl = $("bases");
+Object.keys(PRESETS).forEach(name => {
+  const btn = document.createElement("button");
+  btn.textContent = name;
+  btn.onclick = () => { base = name; p = { ...PRESETS[name] }; syncControls(); update(); };
+  basesEl.appendChild(btn);
+});
+
+function syncControls() {
+  [...basesEl.children].forEach(b => b.classList.toggle("on", b.textContent === base));
+  $("shadow").value = p.shadow;
+  $("stroke").value = p.stroke;
+  $("trim").value = p.trim;
+  $("c0").value = p.start;
+  $("c1").value = p.end;
+  $("haloCk").checked = p.halo;
+}
+
+function update() {
+  const svg = buildSvg();
+  const uri = "data:image/svg+xml;base64," + btoa(svg);
+  for (const [id, sz] of [["p160",160],["p96",96],["p48",48],["p32",32],["p16",16],["t1",16],["t2",16]])
+    $(id).innerHTML = `<img src="${uri}" width="${sz}" height="${sz}" alt="">`;
+  $("fav").href = uri;
+  $("v-shadow").textContent = p.shadow <= 0 ? "无" : p.shadow.toFixed(1);
+  $("v-stroke").textContent = p.stroke.toFixed(1);
+  $("v-trim").textContent = p.trim.toFixed(2);
+  const params = { base, ...p };
+  $("json").value = JSON.stringify(params, null, 1);
+  $("cmd").textContent =
+    `python design/icon/make_assets.py ${base} --stroke ${p.stroke} --trim ${p.trim}` +
+    ` --start "${p.start}" --end "${p.end}" --shadow ${p.shadow}`;
+}
+
+$("shadow").oninput = e => { p.shadow = +e.target.value; update(); };
+$("stroke").oninput = e => { p.stroke = +e.target.value; update(); };
+$("trim").oninput   = e => { p.trim   = +e.target.value; update(); };
+$("c0").oninput     = e => { p.start  = e.target.value; update(); };
+$("c1").oninput     = e => { p.end    = e.target.value; update(); };
+$("haloCk").onchange = e => { p.halo = e.target.checked; update(); };
+
+$("copyJson").onclick = () => navigator.clipboard.writeText($("json").value);
+$("copySvg").onclick  = () => navigator.clipboard.writeText(buildSvg());
+$("dl").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([buildSvg()], { type: "image/svg+xml" }));
+  a.download = `pulse-${base}.svg`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+syncControls();
+update();
+</script>
+</body>
+</html>

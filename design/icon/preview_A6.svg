@@ -1,11 +1,11 @@
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
 <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='0'>
-<stop offset='0' stop-color='#b7c95f'/><stop offset='1' stop-color='#6bb488'/></linearGradient>
+<stop offset='0' stop-color='#FFE100'/><stop offset='1' stop-color='#ff4d3d'/></linearGradient>
 <clipPath id='tile'><rect width='64' height='64' rx='14'/></clipPath></defs>
 <rect width='64' height='64' rx='14' fill='#ffffff'/>
 <polygon points='-14.47,-25.96 27.00,-25.96 -4.06,89.96 -45.53,89.96' fill='#f1efec' clip-path='url(#tile)'/><polygon points='28.53,-25.96 30.74,-25.96 -0.32,89.96 -2.53,89.96' fill='#f3f1ee' clip-path='url(#tile)'/><polygon points='32.02,-25.96 33.46,-25.96 2.40,89.96 0.96,89.96' fill='#f6f4f1' clip-path='url(#tile)'/><polygon points='34.48,-25.96 35.42,-25.96 4.36,89.96 3.42,89.96' fill='#faf8f6' clip-path='url(#tile)'/><polygon points='36.18,-25.96 36.86,-25.96 5.80,89.96 5.12,89.96' fill='#fcfbfa' clip-path='url(#tile)'/>
 <rect x='0.75' y='0.75' width='62.5' height='62.5' rx='13.25' fill='none' stroke='#e4e7ea' stroke-width='1.5'/>
-<linearGradient id='og' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='#ffffff'/><stop offset='0.45' stop-color='#ffffff'/><stop offset='0.65' stop-color='#ffffff' stop-opacity='0'/></linearGradient><path d='M 9 36 C 17 16, 25 16, 32 34 C 37.64 49.04, 45.05 49.94, 53.39 28.40' fill='none' stroke='url(#og)' stroke-width='12.0' stroke-linecap='round'/>
-<path d='M 9 36 C 17 16, 25 16, 32 34 C 37.64 49.04, 45.05 49.94, 53.39 28.40' fill='none' stroke='url(#g)' stroke-width='9.5' stroke-linecap='round'/>
-<circle cx='53.39' cy='28.40' r='4.75' fill='#6bb488'/>
+<linearGradient id='og' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='#ffffff'/><stop offset='0.45' stop-color='#ffffff'/><stop offset='0.65' stop-color='#ffffff' stop-opacity='0'/></linearGradient><path d='M 9 36 C 17 16, 25 16, 32 34 C 38.00 50.00, 46.00 50.00, 55.00 24.00' fill='none' stroke='url(#og)' stroke-width='10.5' stroke-linecap='round'/>
+<path d='M 9 36 C 17 16, 25 16, 32 34 C 38.00 50.00, 46.00 50.00, 55.00 24.00' fill='none' stroke='url(#g)' stroke-width='8' stroke-linecap='round'/>
+<circle cx='55.00' cy='24.00' r='4.0' fill='#ff4d3d'/>
 </svg>
