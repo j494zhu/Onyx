@@ -209,6 +209,15 @@
         <span id="status-quick" class="widget__badge">Daily Cleared</span>
       </header>
 
+      <!-- To-Do progress: done/total. 进度写在 --pct 上（见 updateTodoProgress）,
+           百分比浮在轨道上方跟随移动；is-zero 是渲染前的默认态,防止 0% 时先闪出游标头。 -->
+      <div class="todo-progress is-zero">
+        <span class="todo-progress__pct" id="todo-progress-pct">0%</span>
+        <div class="todo-progress__bar">
+          <div class="todo-progress__fill" id="todo-progress-fill"></div>
+        </div>
+      </div>
+
       <ul id="todo-list" class="todo-list" aria-label="To-Do checklist"></ul>
 
       <div id="todo-empty" class="todo-empty">— No Tasks Yet —</div>

@@ -30,6 +30,15 @@
   --accent-rose:       #d4727a;
   --accent-blue:       #6fa8dc;
 
+  /* To-Do Progress Bar — 凹陷细轨 + 青绿渐变填充,与 accent-teal / 复选框同色系。
+     亮度取在"原始亮版"和"全暗版"之间约 7 成处:压住喧宾夺主,又不至于发灰。 */
+  --progress-track:    rgba(120, 150, 152, 0.13);
+  --progress-fill-a:   rgba(86, 182, 162, 0.36);
+  --progress-fill-b:   rgba(123, 200, 179, 0.59);
+  --progress-fill-c:   rgba(189, 228, 216, 0.72);
+  --progress-glow:     rgba(86, 182, 162, 0.24);
+  --progress-text:     rgba(231, 239, 238, 0.44);
+
   /* Neon Signals */
   --neon-green:        #00ff41;
   --neon-yellow:       #ffcc00;
@@ -738,6 +747,136 @@ body {
 
 
 /* ─── To-Do Checklist ─────────────────────────────────────────── */
+
+/* To-Do progress bar — 凹陷细轨 + 渐变填充 + 发光游标头 + 缓慢流光
+   进度值由 JS 写入 --pct,填充宽度、游标位置、上方数字都从它派生,三者保证同步。
+   数字浮在条子上方跟随移动,所以轨道可以撑满整个卡片宽度。 */
+/* 数字改为浮在轨道上方后,让它住进 widget__header 原有的下边距里,
+   而不是在其之上再堆一层空白 —— 所以这里收紧 header 的 margin 作为补偿。 */
+.widget-todo .widget__header {
+  margin-bottom: 4px;
+}
+
+.todo-progress {
+  --pct: 0%;
+  position: relative;
+  flex-shrink: 0;
+  padding-top: 13px;             /* 给上方浮动的数字让位 */
+  /* 左端对齐下方复选框:.todo-item 的左内边距是 6px,轨道跟着缩进同样距离 */
+  margin-left: 6px;
+  margin-bottom: 12px;
+}
+
+/* 轨道:内阴影让它看起来是嵌进玻璃面板里的凹槽,而不是浮在上面的灰条 */
+.todo-progress__bar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background-color: var(--progress-track);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.40),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.todo-progress__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: var(--pct);
+  border-radius: 999px;
+  overflow: hidden;              /* 裁掉流光,使其只在已完成的部分内扫过 */
+  background: linear-gradient(
+    90deg,
+    var(--progress-fill-a) 0%,
+    var(--progress-fill-b) 55%,
+    var(--progress-fill-c) 100%
+  );
+  box-shadow: 0 0 7px var(--progress-glow);
+  transition: width 0.7s var(--ease), box-shadow 0.5s var(--ease);
+  will-change: width;
+}
+
+/* 流光:大部分时间静止 —— 是"呼吸"不是"脉冲" */
+.todo-progress__fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: todo-progress-sheen 6.75s var(--ease) infinite;
+}
+
+/* 游标头:骑在填充末端的一点高光,进度为 0 时隐藏 */
+.todo-progress__bar::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: var(--pct);
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(204, 237, 226, 0.79);
+  box-shadow:
+    0 0 5px rgba(134, 214, 191, 0.54),
+    0 0 11px var(--progress-glow);
+  opacity: 0;
+  transition: left 0.7s var(--ease), opacity 0.4s var(--ease);
+}
+
+.todo-progress:not(.is-zero) .todo-progress__bar::after {
+  opacity: 1;
+}
+
+/* 全部完成:光晕略散开,百分比转为柔化的青色 —— 有奖励感但不喧哗 */
+.todo-progress.is-complete .todo-progress__fill {
+  box-shadow:
+    0 0 10px rgba(86, 182, 162, 0.36),
+    0 0 22px rgba(86, 182, 162, 0.13);
+}
+
+.todo-progress.is-complete .todo-progress__pct {
+  color: rgba(111, 188, 169, 0.85);
+}
+
+/* 数字:浮在轨道上方,骑着 --pct 跟随游标头移动。
+   固定 4ch 宽 + 居中,于是半宽恒为 2ch,clamp 的两端边界才精确 ——
+   这样 0% / 100% 时数字会贴住轨道两端而不会溢出卡片。 */
+.todo-progress__pct {
+  position: absolute;
+  top: 0;
+  left: clamp(2ch, var(--pct), calc(100% - 2ch));
+  transform: translateX(-50%);
+  min-width: 4ch;
+  text-align: center;
+  font-size: 0.58rem;
+  line-height: 1;                /* 高度可预测,上方留白才好精确控制 */
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--progress-text);
+  font-variant-numeric: tabular-nums;
+  transition: left 0.7s var(--ease), color 0.4s var(--ease);
+}
+
+@keyframes todo-progress-sheen {
+  0%   { transform: translateX(-100%); }
+  36%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-progress__fill::after { animation: none; }
+  .todo-progress__fill,
+  .todo-progress__pct,
+  .todo-progress__bar::after { transition: none; }
+}
+
 .todo-list {
   list-style: none;
   margin: 0;

@@ -434,6 +434,7 @@ function renderTodos() {
 
   if (!todoState.length) {
     if (empty) empty.style.display = 'block';
+    updateTodoProgress();
     return;
   }
   if (empty) empty.style.display = 'none';
@@ -469,6 +470,30 @@ function renderTodos() {
     li.appendChild(del);
     list.appendChild(li);
   });
+
+  updateTodoProgress();
+}
+
+function updateTodoProgress() {
+  const fill = document.getElementById('todo-progress-fill');
+  const pctEl = document.getElementById('todo-progress-pct');
+  if (!fill || !pctEl) return;
+
+  const total = todoState.length;
+  const done = todoState.filter((t) => t.done).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+
+  // --pct 同时驱动填充宽度和游标头位置（见 dashboard.css）。
+  const wrap = fill.closest('.todo-progress');
+  if (wrap) {
+    wrap.style.setProperty('--pct', pct + '%');
+    wrap.classList.toggle('is-zero', pct === 0);
+    wrap.classList.toggle('is-complete', pct === 100 && total > 0);
+  } else {
+    fill.style.width = pct + '%';
+  }
+
+  pctEl.textContent = pct + '%';
 }
 
 function toggleTodo(id) {
