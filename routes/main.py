@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 from collections import OrderedDict
 from itertools import groupby
 
-from flask import Blueprint, render_template, request, redirect, jsonify
+from flask import Blueprint, render_template, request, redirect, jsonify, Response
 from flask_login import login_required, current_user
 from model import db, User, TimeEntry, AlignmentSignal
 
@@ -150,6 +150,62 @@ def delete(id):
         if is_ajax_request(request):
             return jsonify({'status': 'error', 'message': str(e)}), 500
         return f"Error deleting item: {e}"
+
+
+@bp.route('/api/export/today')
+@login_required
+def export_today():
+    logical_date = get_logical_date(datetime.now())
+    date_label = logical_date.strftime('%Y-%m-%d')
+
+    entries = TimeEntry.query.filter_by(
+        user_id=current_user.id, is_archived=False
+    ).order_by(TimeEntry.timestamp.asc()).all()
+
+    todos = load_todos(current_user)
+
+    total_min = 0
+    for e in entries:
+        try:
+            st = datetime.strptime(e.start_time, '%H:%M')
+            en = datetime.strptime(e.end_time, '%H:%M')
+            total_min += max((en - st).total_seconds() / 60, 0)
+        except (ValueError, TypeError):
+            continue
+
+    sep = '=' * 44
+    dash = '-' * 44
+    lines = [sep, f"  ONYX DAILY LOG - {date_label}", sep, ""]
+
+    lines.append("HISTORY FLOW")
+    lines.append(dash)
+    if entries:
+        for i, e in enumerate(entries, 1):
+            lines.append(f"  {i:>2}. {e.start_time} - {e.end_time}  |  {e.desc}")
+        lines.append("")
+        lines.append(f"  Total tracked: {total_min / 60:.1f}h")
+    else:
+        lines.append("  -- No Records Yet --")
+
+    lines.append("")
+    lines.append("TO-DO LIST")
+    lines.append(dash)
+    if todos:
+        for i, t in enumerate(todos, 1):
+            mark = '[x]' if t['done'] else '[ ]'
+            lines.append(f"  {i:>2}. {mark}  {t['text']}")
+        done = sum(1 for t in todos if t['done'])
+        lines.append("")
+        lines.append(f"  Completed: {done}/{len(todos)}")
+    else:
+        lines.append("  -- No Tasks Yet --")
+
+    body = "\r\n".join(lines) + "\r\n"
+    return Response(
+        body,
+        mimetype='text/plain; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{date_label}.txt"'},
+    )
 
 
 @bp.route('/history')
