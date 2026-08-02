@@ -211,6 +211,37 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* Widget header download button — 与标题同色的虚化白 */
+.widget-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  opacity: 0.75;
+  text-decoration: none;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    opacity var(--duration-fast) var(--ease);
+}
+
+.widget-download:hover {
+  color: var(--text-primary);
+  opacity: 1;
+  background: var(--surface-hover);
+  border-color: var(--border-default);
+}
+
+.widget-download:active {
+  transform: translateY(1px);
+}
+
 .widget__badge {
   font-size: 0.72rem;
   color: var(--text-muted);
