@@ -12,7 +12,7 @@ Onyx is a Flask time-tracking/productivity web app with AI-generated daily audit
 # Local development (uses SQLite at data/site.db when DATABASE_URL is unset;
 # Redis optional — app degrades gracefully without it)
 venv/Scripts/activate            # Windows venv is checked into the workspace
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # = requirements.txt + pytest
 python app.py                    # gevent WSGIServer on http://127.0.0.1:5000
 
 # Flask CLI
@@ -33,6 +33,7 @@ No linter is configured. Tests live in [tests/](tests/); `tests/conftest.py` set
 
 Pushing to `master` auto-deploys: GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) SSHes to the server, runs `git reset --hard origin/master` and `docker compose up -d --build`. **Every push to master goes live.**
 
+- **`main` is the working branch, `master` is the deploy branch.** `origin/HEAD` points at `main` and that is what's normally checked out, but the workflow only triggers on `master`. Pushing to `main` deploys nothing; the two branches drift (as of this writing `origin/master` is 2 commits ahead of `origin/main`). Confirm which branch the user wants before pushing.
 - `.env` is NOT tracked by git — the server maintains its own copy with its own secrets. Compose fails fast if `POSTGRES_PASSWORD` / `REDIS_PASSWORD` are missing.
 - Never run `docker compose down -v` on the server — it deletes the data volumes.
 - Changing `POSTGRES_PASSWORD` in `.env` does not change the real DB password in an existing volume (see SERVER_HANDOFF.md).
@@ -50,19 +51,29 @@ Pushing to `master` auto-deploys: GitHub Actions ([.github/workflows/deploy.yml]
 ### Domain quirks
 
 - **`TimeEntry` maps to the legacy DB table `expenses`** (`__tablename__ = 'expenses'`) — the production database predates the rename and there is no migration framework. Never change this mapping without a data-migration plan; a test guards it.
-- **Logical date**: the day boundary is 06:00, not midnight — `get_logical_date()` in routes/common.py assigns pre-6am activity to the previous day. Use it for anything date-scoped.
+- **Logical date**: the day boundary is 06:00, not midnight — `get_logical_date()` assigns pre-6am activity to the previous day. Use it for anything date-scoped. **Two implementations exist with different return types**: [routes/common.py:152](routes/common.py#L152) returns a `date` (this is the one routes use, and what `TimeEntry.archive_date` expects), [services/stats.py:3](services/stats.py#L3) returns a `'%Y-%m-%d'` string. `tests/test_logical_date.py` guards that they agree; import the right one.
+- **Deleting an entry is `POST /api/entries/<id>`**, not `DELETE` — the form-post path and the AJAX path share one route ([routes/main.py:135](routes/main.py#L135)).
+- **"Deep work" is a hardcoded keyword list**, not AI — `deep_keywords` in [services/stats.py](services/stats.py) substring-matches `desc`. Separate from the AI category taxonomy stored in `TimeEntry.category`.
 - **Schema migration**: there is no migration framework. `db.create_all()` plus `ensure_user_columns()` in app.py, which idempotently `ALTER TABLE`s new `user` columns at startup (Postgres advisory lock guards multi-worker races). Adding a column to an existing table means adding it both to model.py and to `ensure_user_columns()`.
 - **JSON-in-Text columns**: `User.todos`, `User.pomodoro_state`, and several `UserProfile` fields store JSON as text; use the sanitize/load helpers in routes/common.py.
 
 ### Real-time sync (SSE)
 
-Mutations publish to Redis channel `onyx:user:<user_id>` via `publish_user_event()`; every Gunicorn worker holding that user's `GET /api/events` stream forwards the event to the browser. New event types must be added to `EVENT_PAYLOAD_SCHEMA` in routes/common.py or publishing is silently skipped. All Redis-dependent features (SSE, rate limiting) no-op gracefully when `app.redis_client` is `None`.
+Production runs 4 gevent Gunicorn workers ([Dockerfile](Dockerfile)), so a user's browser tabs land on different workers — hence the Redis pub/sub fan-out rather than in-process broadcast. Mutations publish to Redis channel `onyx:user:<user_id>` via `publish_user_event()`; every worker holding that user's `GET /api/events` stream forwards the event to the browser. New event types must be added to `EVENT_PAYLOAD_SCHEMA` in routes/common.py or publishing is silently skipped. All Redis-dependent features (SSE, rate limiting) no-op gracefully when `app.redis_client` is `None`.
 
 ### AI endpoints
 
-`routes/ai.py` calls DeepSeek (`deepseek-v4-flash`) via raw `requests` POST in OpenAI-compatible format; prompts live in `services/prompts.py`. Daily audit (`/api/ai/audit`) has per-user Redis rate limiting plus a 15s session cooldown (user `juncheng` is exempt). `/api/generate_weekly_insight` currently returns hardcoded mock data — the real API call is commented out. User feedback on AI output is stored in `AlignmentSignal` and injected into later prompts as few-shot examples.
+`routes/ai.py` calls DeepSeek (`deepseek-v4-flash`) via raw `requests` POST in OpenAI-compatible format; prompts live in `services/prompts.py`. Three endpoints:
+
+- **`POST /api/ai/audit`** — daily audit. Per-user Redis rate limiting (3/min, 20/hour, set in app.py) plus a 15s session cooldown; user `juncheng` is exempt from both. The AI returns a rubric of weighted dimensions and the server recomputes `final_score` from it, then overrides `status` by score band (and forces `red` for 01:00–06:00 activity).
+- **`POST /api/visualize`** — taxonomy engine. Asks the model to bucket unarchived entries into 3–6 categories, then **writes the result back to `TimeEntry.category` and commits** — this endpoint mutates data, it isn't read-only.
+- **`POST /api/insights/weekly`** — weekly report. Still gathers logs and builds the real prompt, then **discards it and returns hardcoded mock data** after a `gevent.sleep(1.5)`; the live API call was never wired up ([routes/ai.py:307](routes/ai.py#L307)).
+
+User feedback on AI output is stored in `AlignmentSignal` (`reward_score` 1 = disliked, 5 = liked) and injected into the weekly prompt as few-shot examples.
 
 ## Gotchas
 
 - README.md documents features well, but its `app.py:NNN` line references are stale — the code was since split into `routes/`.
 - `SERVER_HANDOFF.md` (in Chinese) documents server deployment pitfalls, especially around `.env` and DB passwords.
+- `issues.txt` (in Chinese) is the running feature backlog, tagged `[resolved]` / `[unresolved]` / `[lesson]` / `[cancelled]` — the best source for what the owner intends to build next and why past decisions were made.
+- Much of the inline comment prose is Chinese; match the surrounding language when editing a file.
