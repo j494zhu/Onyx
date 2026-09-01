@@ -496,6 +496,29 @@ html.dark-mode .nav-link { color: #ffffff; }
   }
 }
 
+/* 深色模式下 Start Session 按钮由霓虹绿改为白色(文字+边框), 停掉呼吸动画 */
+html.dark-mode .btn-session--cta:not(.is-recording) {
+  animation: none;
+  background: linear-gradient(135deg, rgba(217, 217, 217, 0.05) 0%, rgba(217, 217, 217, 0.085) 100%);
+  border: 1px solid rgba(217, 217, 217, 0.47);
+  color: #d9d9d9;
+  text-shadow: 0 0 6px rgba(217, 217, 217, 0.21);
+  box-shadow:
+    0 0 4px  rgba(217, 217, 217, 0.13),
+    0 0 12px rgba(217, 217, 217, 0.05),
+    inset 0 0 8px rgba(217, 217, 217, 0.03);
+}
+
+html.dark-mode .btn-session--cta:not(.is-recording):hover {
+  background: linear-gradient(135deg, rgba(217, 217, 217, 0.10) 0%, rgba(217, 217, 217, 0.12) 100%);
+  border-color: rgba(217, 217, 217, 0.72);
+  color: #d9d9d9;
+  text-shadow: 0 0 10px rgba(217, 217, 217, 0.38);
+  box-shadow:
+    0 0 12px rgba(217, 217, 217, 0.26),
+    0 0 32px rgba(217, 217, 217, 0.10);
+}
+
 .btn-session--cta:hover {
   background: linear-gradient(135deg, rgba(0, 255, 65, 0.12) 0%, rgba(86, 182, 162, 0.14) 100%);
   border-color: rgba(0, 255, 65, 0.55);
