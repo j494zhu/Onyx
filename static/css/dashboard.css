@@ -146,6 +146,7 @@ body {
 .nav-link--blue  { color: var(--accent-blue); }
 .nav-link--teal  { color: var(--accent-teal); }
 .nav-link--rose  { color: var(--accent-rose); }
+html.dark-mode .nav-link { color: #ffffff; }
 
 .nav-divider {
   color: var(--text-ghost);
