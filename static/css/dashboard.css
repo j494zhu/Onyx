@@ -1018,6 +1018,34 @@ html.dark-mode .btn-archive:active {
   .todo-progress__bar::after { transition: none; }
 }
 
+/* 深色模式:进度条褪去青绿,改为带透明度的白色 —— 与顶栏链接、Start Session
+   按钮在深色下"去彩色化"的做法一致。轨道和填充都只换颜色,结构不动。 */
+html.dark-mode .todo-progress {
+  --progress-track:   rgba(255, 255, 255, 0.09);
+  --progress-fill-a:  rgba(255, 255, 255, 0.30);
+  --progress-fill-b:  rgba(255, 255, 255, 0.52);
+  --progress-fill-c:  rgba(255, 255, 255, 0.72);
+  --progress-glow:    rgba(255, 255, 255, 0.16);
+  --progress-text:    rgba(255, 255, 255, 0.44);
+}
+
+html.dark-mode .todo-progress__bar::after {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 5px rgba(255, 255, 255, 0.40),
+    0 0 11px var(--progress-glow);
+}
+
+html.dark-mode .todo-progress.is-complete .todo-progress__fill {
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.28),
+    0 0 22px rgba(255, 255, 255, 0.10);
+}
+
+html.dark-mode .todo-progress.is-complete .todo-progress__pct {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .todo-list {
   list-style: none;
   margin: 0;
@@ -1079,6 +1107,39 @@ html.dark-mode .btn-archive:active {
   border-color: var(--accent-teal);
   color: var(--surface-deep);
   font-weight: 700;
+}
+
+/* 深色模式:复选框套用笔记本书签的配色 —— 未勾选 --line-dim,悬停 --line-hover,
+   勾选后描边提亮到 --line-bright 且内部依旧透空,只在中间放一个白色的钩 */
+html.dark-mode .todo-item__check {
+  border-color: var(--line-dim);
+}
+
+html.dark-mode .todo-item__check:hover {
+  border-color: var(--line-hover);
+}
+
+/* 勾选:描边只提到 --line-hover(再亮就抢眼了),内部透空,
+   把 ✓ 字符隐掉,改用伪元素画一条左下→右上的对角线,颜色跟描边一致 */
+html.dark-mode .todo-item.is-done .todo-item__check {
+  position: relative;
+  background: transparent;
+  border-color: var(--line-hover);
+  color: transparent;
+}
+
+html.dark-mode .todo-item.is-done .todo-item__check::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.75px),
+    var(--line-hover) calc(50% - 0.75px),
+    var(--line-hover) calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
+  pointer-events: none;
 }
 
 .todo-item__text {
@@ -1373,10 +1434,11 @@ html.dark-mode .btn-archive:active {
 .dm-toggle.is-dark .dm-toggle__hint--sun  { opacity: 0.45; }
 
 /* Sliding knob */
+/* 容器 border-box 26px 减去 1px 边框后内容区是 24px,20px 的旋钮上下各留 2px 才对称 */
 .dm-toggle__slider {
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 2px;
+  left: 2px;
   width: 20px;
   height: 20px;
   display: flex;
@@ -1411,6 +1473,16 @@ html.dark-mode .btn-archive:active {
 
 .dm-toggle__face--sun  { color: #f59e0b; }
 .dm-toggle__face--moon { color: #334155; }
+
+/* 深色模式:太阳/月亮都改成带透明度的白色,旋钮也压暗,不再是亮银色 */
+html.dark-mode .dm-toggle__hint--sun,
+html.dark-mode .dm-toggle__hint--moon { color: rgba(255, 255, 255, 0.85); }
+html.dark-mode .dm-toggle__face--sun,
+html.dark-mode .dm-toggle__face--moon { color: rgba(255, 255, 255, 0.85); }
+html.dark-mode .dm-toggle.is-dark .dm-toggle__slider {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+}
 
 /* Light mode shows the sun face; dark mode shows the moon face */
 .dm-toggle:not(.is-dark) .dm-toggle__face--moon { opacity: 0; transform: rotate(-45deg) scale(0.6); }
