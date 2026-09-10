@@ -22,6 +22,9 @@
   --text-secondary:    rgba(255, 255, 255, 0.65);
   --text-muted:        rgba(255, 255, 255, 0.35);
   --text-ghost:        rgba(255, 255, 255, 0.18);
+  /* 正文档位：比标题(--text-muted)亮，长时间阅读/编辑不吃力。
+     笔记本正文和待办条目用它，标题和顶栏仍留在 --text-muted。 */
+  --text-content:      rgba(255, 255, 255, 0.58);
 
   /* Accent Palette */
   --accent-gold:       #c9a94e;
@@ -767,7 +770,7 @@ html.dark-mode .btn-archive:active {
   font-family: inherit;
   font-size: 0.88rem;
   line-height: 1.65;
-  color: var(--text-primary);
+  color: var(--text-content);
   overflow-y: auto;
 }
 
@@ -1082,7 +1085,7 @@ html.dark-mode .btn-archive:active {
   flex: 1;
   font-size: 0.88rem;
   line-height: 1.55;
-  color: var(--text-primary);
+  color: var(--text-content);
   word-break: break-word;
   cursor: text;
 }
@@ -1103,7 +1106,7 @@ html.dark-mode .btn-archive:active {
   font-family: inherit;
   font-size: 0.88rem;
   line-height: 1.55;
-  color: var(--text-primary);
+  color: var(--text-content);
 }
 
 .todo-item__del {
@@ -1152,7 +1155,7 @@ html.dark-mode .btn-archive:active {
   outline: none;
   font-family: inherit;
   font-size: 0.88rem;
-  color: var(--text-primary);
+  color: var(--text-content);
 }
 
 .todo-add__input::placeholder {
