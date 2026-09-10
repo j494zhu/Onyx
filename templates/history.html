@@ -80,18 +80,6 @@
                         </div>
                     </div>
 
-                    <!-- ── 统计条：分类时间分布 ── -->
-                    {% if stats.category_minutes %}
-                    <div class="day-stats-bar">
-                        {% for cat, minutes in stats.category_minutes.items() %}
-                        {% set pct = (minutes / stats.total_minutes * 100) | round(1) if stats.total_minutes > 0 else 0 %}
-                        <div class="stat-segment" style="flex: {{ pct }};" title="{{ cat }}: {{ (minutes / 60) | round(1) }}h ({{ pct | int }}%)">
-                            <span class="stat-segment-label">{{ cat }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
                     <!-- ── 记录列表 ── -->
                     <div class="log-list">
                         {% for item in items %}
@@ -103,9 +91,6 @@
                             </div>
                             <div class="log-content">
                                 <span class="log-desc">{{ item.desc }}</span>
-                                {% if item.category %}
-                                <span class="log-tag">#{{ item.category }}</span>
-                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}

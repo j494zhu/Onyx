@@ -4,9 +4,8 @@ from services.stats import calculate_duration, calculate_stats_from_logs
 from services.history_helper import calculate_duration_minutes, build_day_stats
 
 
-def _log(desc='misc', start='10:00', end='11:00', category=None):
-    return SimpleNamespace(desc=desc, start_time=start, end_time=end,
-                           category=category)
+def _log(desc='misc', start='10:00', end='11:00'):
+    return SimpleNamespace(desc=desc, start_time=start, end_time=end)
 
 
 # --- calculate_duration ---
@@ -62,25 +61,23 @@ def test_duration_minutes_unparseable_returns_zero():
 
 # --- build_day_stats ---
 
-def test_build_day_stats_aggregates_categories():
+def test_build_day_stats_focus_from_keywords():
+    # Focus% 走 desc 关键词匹配（DEEP_KEYWORDS），与 category 无关
     items = [
-        _log('a', '10:00', '11:00', category='Deep Work'),
-        _log('b', '11:00', '11:30', category='Break'),
-        _log('c', '12:00', '13:00', category=None),  # → Uncategorized
+        _log('write code', '10:00', '11:00'),   # 深度 60min
+        _log('lunch', '11:00', '11:30'),        # 非深度 30min
+        _log('nap', '12:00', '13:00'),          # 非深度 60min
     ]
     stats = build_day_stats(items)
     assert stats['total_minutes'] == 150
-    assert stats['category_minutes'] == {
-        'Deep Work': 60, 'Break': 30, 'Uncategorized': 60,
-    }
     assert stats['focus_pct'] == 40  # 60/150
     assert stats['entry_count'] == 3
-    assert stats['top_category'] in ('Deep Work', 'Uncategorized')  # 并列时取其一
+    assert 'category_minutes' not in stats
+    assert 'top_category' not in stats
 
 
 def test_build_day_stats_empty():
     stats = build_day_stats([])
     assert stats['total_minutes'] == 0
     assert stats['focus_pct'] == 0
-    assert stats['top_category'] == '—'
     assert stats['entry_count'] == 0

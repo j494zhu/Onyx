@@ -43,7 +43,18 @@
 
   <!-- ═══ HEADER ═══════════════════════════════════════════ -->
   <header class="dash-header">
-    <h2 class="dash-title">{{ current_user.username }}'s Log</h2>
+    <div class="dash-date">
+      <time class="dash-date__text" datetime="{{ logical_date.isoformat() }}">
+        {{ logical_date.strftime('%b %d, %Y') }}
+      </time>
+      {# 星期条：周一起头，当天那一格提亮。日期用的是逻辑日期（06:00 分界） #}
+      <div class="dash-week" role="img" aria-label="{{ logical_date.strftime('%A') }}">
+        {% for letter in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] %}
+        <span class="dash-week__day{% if loop.index0 == logical_date.weekday() %} is-today{% endif %}"
+              aria-hidden="true">{{ letter }}</span>
+        {% endfor %}
+      </div>
+    </div>
     <nav class="dash-nav">
       <!-- Dark Mode Toggle -->
       <div class="dm-toggle" id="dm-toggle" onclick="toggleDarkMode()" role="button" tabindex="0" aria-label="Toggle dark mode" title="Toggle theme">
@@ -81,38 +92,16 @@
         </span>
       </div>
       <span class="nav-divider">|</span>
-      <a href="/history" class="nav-link nav-link--gold">View History</a>
+      <a href="/history" class="nav-link">View History</a>
       <span class="nav-divider">|</span>
-      <button onclick="openWeeklyInsight()" class="nav-link nav-link--blue">Weekly Intel</button>
+      <a href="/settings" class="nav-link">Settings</a>
       <span class="nav-divider">|</span>
-      <a href="/settings" class="nav-link nav-link--teal">Settings</a>
-      <span class="nav-divider">|</span>
-      <a href="/logout" class="nav-link nav-link--rose">Logout</a>
+      <a href="/logout" class="nav-link">Logout</a>
     </nav>
   </header>
 
   <!-- ═══ BENTO GRID ═══════════════════════════════════════ -->
   <main class="bento-grid">
-
-    <!-- ─── SIDE PANEL TOGGLE ─── -->
-    <button
-      id="panelToggle"
-      class="panel-toggle"
-      onclick="toggleSidePanel()"
-      aria-label="Toggle side panel"
-      aria-expanded="false"
-      title="Toggle side panel">
-      <!-- Right chevrons (expand panel) -->
-      <svg class="panel-toggle__icon panel-toggle__icon--expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="10,5 17,12 10,19"/>
-        <polyline points="3,5 10,12 3,19"/>
-      </svg>
-      <!-- Left chevrons (collapse panel) -->
-      <svg class="panel-toggle__icon panel-toggle__icon--collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="14,5 7,12 14,19"/>
-        <polyline points="21,5 14,12 21,19"/>
-      </svg>
-    </button>
 
     <!-- ─── SESSION (Clock + Input) ─── -->
     <section class="widget widget-session">
@@ -243,224 +232,61 @@
         <h3 class="widget__title"># NoteBook</h3>
         <span id="status-book" class="widget__badge">Permanent</span>
       </header>
-      <textarea
-        id="notebook_area"
-        class="note-textarea"
-        placeholder="Long-term storage...">{{ current_user.notebook }}</textarea>
-    </section>
 
-    <!-- ─── DATA VISUALIZATION ─── -->
-    <section class="widget widget-dataviz">
-      <header class="viz-header">
-        <h3 class="viz-title">Data Visualization</h3>
-        <div class="viz-controls">
-          <div class="viz-toggle" role="tablist">
-            <button class="viz-toggle__btn is-active" role="tab" aria-selected="true" data-chart="doughnut">Donut</button>
-            <button class="viz-toggle__btn" role="tab" aria-selected="false" data-chart="bar">Bar</button>
-          </div>
-          <button id="vizRefresh" class="viz-refresh" type="button" title="Refresh chart" aria-label="Refresh chart">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-              <polyline points="21 3 21 9 15 9"></polyline>
+      <!-- 书签栏：书签图形由 JS 依据 #notebooks-data 渲染；
+           加号/叉号常驻最右，叉号作用于当前选中的那本 -->
+      <div class="nb-tabs" id="nb-tabs">
+        <div class="nb-tabs__strip" id="nb-tab-strip" role="tablist" aria-label="Notebooks"></div>
+        <div class="nb-tabs__actions">
+          <button
+            type="button"
+            id="nb-add"
+            class="nb-btn"
+            title="New notebook"
+            aria-label="New notebook">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="nb-del"
+            class="nb-btn nb-btn--del"
+            title="Delete current notebook"
+            aria-label="Delete current notebook">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <line x1="18" y1="6" x2="6" y2="18"></line>
             </svg>
           </button>
         </div>
-      </header>
-
-      <div class="viz-chart-wrap">
-        <div class="viz-chart-container">
-          <canvas id="vizChart" aria-label="Category time distribution chart"></canvas>
-        </div>
-
-        <!-- Empty State -->
-        <div class="viz-empty" id="vizEmpty">
-          <div class="viz-empty__icon"></div>
-          <span class="viz-empty__title">Awaiting Data Input</span>
-          <span class="viz-empty__sub">Log sessions to unlock telemetry matrix</span>
-        </div>
-
-        <!-- Loading Spinner -->
-        <div class="viz-loader" aria-hidden="true">
-          <div class="viz-loader__ring"></div>
-        </div>
       </div>
 
-      <ul class="viz-legend" aria-label="Chart legend"></ul>
+      <textarea
+        id="notebook_area"
+        class="note-textarea"
+        placeholder="Long-term storage..."></textarea>
 
-      <footer class="viz-footer">
-        <span class="viz-footer__label">Total Tracked</span>
-        <span class="viz-footer__value" id="vizTotal">—</span>
-      </footer>
-    </section>
-
-    <!-- ─── NEURAL AUDIT ─── -->
-    <section class="widget widget-neural">
-      <header class="widget__header">
-        <h3 class="widget__title">
-          <span id="hud-status-dot" class="status-dot"></span>
-          Neural Audit
-        </h3>
-        <span id="hud-status-text" class="widget__badge">Standby</span>
-      </header>
-
-      <div class="hud-controls">
-        <span class="control-label">TONE:</span>
-        <div class="tone-selector">
-          <input type="radio" id="tone-strict" name="ai_tone" value="strict" checked>
-          <label for="tone-strict" title="Ruthless logic">STRICT</label>
-          <input type="radio" id="tone-roast" name="ai_tone" value="roast">
-          <label for="tone-roast" title="Emotional damage">ROAST</label>
-          <input type="radio" id="tone-gentle" name="ai_tone" value="gentle">
-          <label for="tone-gentle" title="Mental support">GENTLE</label>
-        </div>
-        <a href="/settings" class="hud-gear" title="Edit Preferences" aria-label="Settings">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </a>
-      </div>
-
-      <div id="hud-content" class="hud-content-area">
-        <div class="hud-score-wrap">
-          <span id="hud-score-val" class="hud-score">--</span>
-          <div class="hud-score-label">Productivity Score</div>
-        </div>
-        <div id="hud-insight-text" class="hud-insight">System Ready. Awaiting uplink...</div>
-        <div id="hud-warning-box" class="hud-warning" style="display:none;">
-          ⚠ <span id="hud-warn-text"></span>
-        </div>
-        <div id="hud-rubric" class="hud-rubric" style="display:none;">
-          <div class="hud-rubric__grid" id="hud-rubric-grid"></div>
-        </div>
-      </div>
-
-      <button id="audit-btn" class="btn-audit" onclick="runNeuralAudit()">Initialize Scan</button>
-
-      <div id="rlhf-zone" class="rlhf-zone">
-        <!-- Fixed-height slot: scale and the confirmation message are stacked
-             (absolutely positioned) so they share the same spot and toggling
-             them never shifts the text above. -->
-        <div class="rlhf-slot">
-          <div class="rlhf-scale" id="rlhf-scale">
-            <span class="rlhf-scale__end">dislike</span>
-            <button onclick="submitRLHF(1)" class="rlhf-dot" aria-label="dislike"></button>
-            <button onclick="submitRLHF(2)" class="rlhf-dot"></button>
-            <button onclick="submitRLHF(4)" class="rlhf-dot"></button>
-            <button onclick="submitRLHF(5)" class="rlhf-dot" aria-label="like"></button>
-            <span class="rlhf-scale__end">like</span>
-          </div>
-          <span id="rlhf-updated-msg" class="rlhf-updated">[ DATASET UPDATED ]</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── DATA MATRIX ─── -->
-    <section class="widget widget-matrix">
-      <header class="widget__header">
-        <h3 class="widget__title"># Data Matrix</h3>
-      </header>
-      <div class="matrix-grid">
-        <div class="matrix-cell">
-          <span class="matrix-cell__label">Logged</span>
-          <span class="matrix-cell__value" id="matrixLogged">{{ total_hours | default('0') }}</span>
-        </div>
-        <div class="matrix-cell">
-          <span class="matrix-cell__label">Deep Work</span>
-          <span class="matrix-cell__value matrix-cell__value--teal" id="matrixDeep">{{ deep_hours | default('0') }}</span>
-        </div>
-        <div class="matrix-cell">
-          <span class="matrix-cell__label">Streak</span>
-          <span class="matrix-cell__value matrix-cell__value--gold">{{ current_user.streak }}</span>
-        </div>
-        <div class="matrix-cell matrix-cell--rlhf">
-          <span class="matrix-cell__label">RLHF Dataset</span>
-          <span class="matrix-cell__value matrix-cell__value--blue">{{ rlhf_count|default(0) }}</span>
-          <div class="matrix-rlhf-bar">
-            <div class="matrix-rlhf-bar__fill" style="width:{{ model_confidence }}%;"></div>
-          </div>
-          <span class="matrix-rlhf-badge">Active Learning</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── POMODORO ─── -->
-    <section class="widget widget-pomo">
-      <header class="widget__header">
-        <h3 class="widget__title"># Pomodoro</h3>
-      </header>
-      <div id="pomo-cycle-dots" class="pomo-dots">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-      </div>
-      <div id="pomo-timer-display" class="pomo-display">25:00</div>
-      <div id="pomo-status-text" class="pomo-status">READY TO FOCUS</div>
-      <button id="pomo-btn" class="btn-pomo" onclick="togglePomodoro()">INITIALIZE SEQUENCE</button>
+      <!-- Initial notebook state injected by the server -->
+      <script id="notebooks-data" type="application/json">{{ notebooks_json | safe }}</script>
     </section>
 
   </main>
 
-  <!-- ═══ MODAL: WEEKLY INTEL ═══════════════════════════════ -->
-  <div id="insight-modal" class="modal-overlay">
-    <div id="insight-card" class="modal-card">
-
-      <div id="card-color-bar" class="modal-color-bar"></div>
-
-      <button onclick="closeInsight()" class="modal-close" aria-label="Close modal">&times;</button>
-
-      <div class="modal-body">
-        <div class="modal-overline">NEURAL SYNTHESIS</div>
-        <h2 id="card-week-label" class="modal-title">Loading...</h2>
-
-        <span id="card-phase" class="modal-phase">CALCULATING PHASE...</span>
-
-        <div class="modal-stats">
-          <div class="modal-stat">
-            <div class="modal-stat__label">Deep Ratio</div>
-            <div id="card-dw-ratio" class="modal-stat__value">--</div>
-          </div>
-          <div class="modal-stat">
-            <div class="modal-stat__label">Peak Window</div>
-            <div id="card-peak" class="modal-stat__value">--:--</div>
-          </div>
-        </div>
-
-        <div class="modal-section-label">Major Achievement</div>
-        <div id="card-achievement" class="modal-section-text">--</div>
-
-        <div id="card-roast-box" class="modal-roast-box">
-          <div class="modal-roast-box__header">⚠️ ANOMALY DETECTED</div>
-          <div id="card-roast" class="modal-roast-box__text">--</div>
-        </div>
-
-        <div class="modal-section-label">Optimization Protocol</div>
-        <div id="card-advice" class="modal-section-text">--</div>
-
-        <!-- RLHF Feedback -->
-        <div id="insight-feedback-box" class="modal-feedback">
-          <span class="modal-feedback__label">Rate Analysis Accuracy</span>
-          <div class="modal-feedback__buttons">
-            <button onclick="submitInsightFeedback(5)" class="modal-feedback__btn modal-feedback__btn--accurate">✅ Accurate</button>
-            <button onclick="submitInsightFeedback(1)" class="modal-feedback__btn modal-feedback__btn--reject">❌ Hallucination</button>
-          </div>
-        </div>
-
-        <div id="insight-feedback-success" class="modal-feedback-success">
-          <span class="modal-feedback-success__icon">✓</span>
-          <span class="modal-feedback-success__text">Protocol Updated</span>
-          <span class="modal-feedback-success__sub">Thanks for your feedback</span>
-        </div>
+  <!-- ═══ CONFIRM DIALOG (notebook delete) ═══════════════════ -->
+  <div id="confirm-overlay" class="confirm-overlay" hidden>
+    <div class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h4 id="confirm-title" class="confirm-card__title">Delete notebook</h4>
+      <p id="confirm-text" class="confirm-card__text"></p>
+      <div class="confirm-card__actions">
+        <button type="button" id="confirm-cancel" class="confirm-btn">Cancel</button>
+        <button type="button" id="confirm-ok" class="confirm-btn confirm-btn--danger">Delete</button>
       </div>
-
-      <div class="modal-footer">GENERATED BY ONYX NEURAL ENGINE</div>
-
     </div>
   </div>
 
   <!-- ═══ SCRIPTS ═══════════════════════════════════════════ -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="{{ url_for('static', filename='scripts/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
 

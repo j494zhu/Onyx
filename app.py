@@ -22,7 +22,6 @@ from flask.cli import with_appcontext
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
-DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
 
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 REDIS_CHANNEL_PREFIX = os.environ.get('REDIS_CHANNEL_PREFIX', 'onyx:user')
@@ -32,7 +31,6 @@ RATE_LIMIT_PER_MINUTE = 3
 RATE_LIMIT_PER_HOUR = 20
 
 # Store config values on the app for access by blueprints via current_app
-app.config['DEEPSEEK_API_KEY'] = DEEPSEEK_API_KEY
 app.config['REDIS_CHANNEL_PREFIX'] = REDIS_CHANNEL_PREFIX
 app.config['SSE_HEARTBEAT_SECONDS'] = SSE_HEARTBEAT_SECONDS
 app.config['RATE_LIMIT_PER_MINUTE'] = RATE_LIMIT_PER_MINUTE
@@ -111,6 +109,14 @@ def ensure_user_columns():
         except Exception as exc:
             app.logger.info('Skipping adding user.pomodoro_state (likely a concurrent worker won the race): %s', exc)
 
+    if 'notebooks' not in existing_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(sa_text("ALTER TABLE \"user\" ADD COLUMN notebooks TEXT DEFAULT NULL"))
+            app.logger.info('Added missing column user.notebooks')
+        except Exception as exc:
+            app.logger.info('Skipping adding user.notebooks (likely a concurrent worker won the race): %s', exc)
+
 
 def initialize_database():
     with app.app_context():
@@ -131,14 +137,13 @@ def initialize_database():
 initialize_database()
 
 # --- Register Blueprints ---
-from routes import auth_bp, main_bp, profile_bp, notes_bp, sse_bp, ai_bp, data_bp
+from routes import auth_bp, main_bp, profile_bp, notes_bp, sse_bp, data_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(main_bp)
 app.register_blueprint(profile_bp)
 app.register_blueprint(notes_bp)
 app.register_blueprint(sse_bp)
-app.register_blueprint(ai_bp)
 app.register_blueprint(data_bp)
 
 # --- CLI command ---

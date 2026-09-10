@@ -246,59 +246,6 @@ body {
     font-size: 0.6rem;
 }
 
-/* ── Category Distribution Bar ──────────── */
-.day-stats-bar {
-    display: flex;
-    height: 6px;
-    border-radius: 0;
-    overflow: hidden;
-    background: rgba(0, 0, 0, 0.3);
-}
-
-.stat-segment {
-    position: relative;
-    min-width: 4px;
-    transition: opacity 0.3s ease;
-    cursor: default;
-}
-
-.stat-segment:hover {
-    opacity: 0.75;
-}
-
-.stat-segment-label {
-    display: none;
-    position: absolute;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.85);
-    color: #fff;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    font-family: monospace;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 10;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.stat-segment:hover .stat-segment-label {
-    display: block;
-}
-
-/* Assign colors to segments by position */
-.stat-segment:nth-child(1)  { background: #3498db; }
-.stat-segment:nth-child(2)  { background: #2ecc71; }
-.stat-segment:nth-child(3)  { background: #e74c3c; }
-.stat-segment:nth-child(4)  { background: #f39c12; }
-.stat-segment:nth-child(5)  { background: #9b59b6; }
-.stat-segment:nth-child(6)  { background: #1abc9c; }
-.stat-segment:nth-child(7)  { background: #e67e22; }
-.stat-segment:nth-child(8)  { background: #ecf0f1; }
-.stat-segment:nth-child(n+9) { background: #7f8c8d; }
-
 /* ── Log Items ──────────────────────────── */
 .log-list {
     background: rgba(0, 0, 0, 0.2);
@@ -359,14 +306,6 @@ body {
 .log-desc {
     color: #e0e0e0;
     font-size: 0.95rem;
-}
-
-.log-tag {
-    font-size: 0.7rem;
-    color: #3498db;
-    margin-top: 4px;
-    font-style: italic;
-    opacity: 0.8;
 }
 
 /* ── Empty State ────────────────────────── */

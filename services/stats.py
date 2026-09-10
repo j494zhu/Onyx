@@ -6,6 +6,16 @@ def get_logical_date(dt):
     else:
         return dt.strftime('%Y-%m-%d')
 
+# 深度工作关键词：对 desc 做子串匹配，与 AI 无关。
+# 仪表盘和 history 页的 Focus% 共用这一份，避免两处漂移。
+DEEP_KEYWORDS = ['code', 'coding', 'study', 'math', 'cs', 'exam', 'quiz', 'write', 'algo', 'data', 'train', 'ai', 'implement', 'logic', 'work', 'study']
+
+
+def is_deep_work(desc):
+    """desc 是否命中深度工作关键词"""
+    return any(k in (desc or '').lower() for k in DEEP_KEYWORDS)
+
+
 def calculate_stats_from_logs(logs_list):
     """
     纯计算函数：传入 log 对象列表，返回统计数据。
@@ -13,7 +23,6 @@ def calculate_stats_from_logs(logs_list):
     """
     total_minutes = 0
     deep_minutes = 0
-    deep_keywords = ['code', 'coding', 'study', 'math', 'cs', 'exam', 'quiz', 'write', 'algo', 'data', 'train', 'ai', 'implement', 'logic', 'work', 'study']
 
     for log in logs_list:
         try:
@@ -26,7 +35,7 @@ def calculate_stats_from_logs(logs_list):
             duration = (t_end - t_start).total_seconds() / 60
             total_minutes += duration
             
-            if any(k in log.desc.lower() for k in deep_keywords):
+            if is_deep_work(log.desc):
                 deep_minutes += duration
         except Exception:
             continue

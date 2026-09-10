@@ -3,46 +3,9 @@ import time
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from model import db, TimeEntry, AlignmentSignal
-from services.stats import calculate_stats_from_logs, calculate_duration
+from model import db
 
 bp = Blueprint('data', __name__)
-
-
-@bp.route('/api/stats', methods=['GET'])
-@login_required
-def get_stats():
-    active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
-    total_h, deep_h = calculate_stats_from_logs(active_items)
-    total_minutes = sum(calculate_duration(item.start_time, item.end_time) for item in active_items)
-    return jsonify({
-        "total_minutes": total_minutes,
-        "total_hours": total_h,
-        "deep_hours": deep_h,
-    })
-
-
-@bp.route('/api/alignment', methods=['POST'])
-@login_required
-def submit_alignment():
-    try:
-        data = request.json
-
-        new_signal = AlignmentSignal(
-            user_id=current_user.id,
-            input_context=data.get('context', 'Unknown Context'),
-            ai_response=data.get('response', 'User Feedback'),
-            reward_score=data.get('score', 0)
-        )
-
-        db.session.add(new_signal)
-        db.session.commit()
-
-        return jsonify({"status": "success", "message": "Signal Captured"})
-
-    except Exception as e:
-        print(f"Alignment Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @bp.route('/api/pomodoro', methods=['POST'])

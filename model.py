@@ -14,7 +14,13 @@ class User(UserMixin, db.Model):
     time_entries = db.relationship('TimeEntry', backref='user', lazy=True)
 
     quick_note = db.Column(db.Text, default="")
+
+    # 旧的单栏笔记本。已被 notebooks 取代，仅作为迁移前的备份保留，
+    # 不再有任何写入方；迁移逻辑见 routes/common.py 的 load_notebooks()。
     notebook = db.Column(db.Text, default="")
+
+    # 多笔记本，存 JSON 数组 [{id, name, content}]；助手函数在 routes/common.py。
+    notebooks = db.Column(db.Text, default=None)
 
     # To-Do checklist stored as a JSON array of {id, text, done}.
     todos = db.Column(db.Text, default="[]")

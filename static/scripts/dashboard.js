@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
    ONYX NEURAL ENGINE — Dashboard Logic
-   Unified JS: Clock, Recorder, Notebook, Chart, HUD, Modal, Pomodoro
+   Unified JS: Clock, Recorder, Notebook, To-Do
    ══════════════════════════════════════════════════════════════ */
 
 // ═══════════════════════════════════════════
@@ -19,23 +19,6 @@ function formatTime(date) {
   const h = date.getHours().toString().padStart(2, '0');
   const m = date.getMinutes().toString().padStart(2, '0');
   return `${h}:${m}`;
-}
-
-function formatDuration(totalMinutes) {
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${h}h ${m.toString().padStart(2, '0')}m`;
-}
-
-function hexToRgba(hex, alpha) {
-  let c;
-  if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
-    c = hex.substring(1).split('');
-    if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-    c = '0x' + c.join('');
-    return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${alpha})`;
-  }
-  return `rgba(52,152,219,${alpha})`;
 }
 
 function escapeHtml(value) {
@@ -98,28 +81,6 @@ function buildEntryRow(entry) {
   return tr;
 }
 
-// Refresh the live "Total Tracked" footer and Data Matrix cells from a
-// lightweight endpoint (no LLM). The chart itself is NOT refreshed here — that
-// stays manual/page-load only, since it hits a paid categorization API.
-async function refreshTrackedStats() {
-  try {
-    const res = await fetch('/api/stats', { headers: { Accept: 'application/json' } });
-    if (!res.ok) return;
-    const d = await res.json();
-
-    const totalEl = document.getElementById('vizTotal');
-    if (totalEl) totalEl.textContent = formatDuration(d.total_minutes || 0);
-
-    const loggedEl = document.getElementById('matrixLogged');
-    if (loggedEl) loggedEl.textContent = d.total_hours;
-
-    const deepEl = document.getElementById('matrixDeep');
-    if (deepEl) deepEl.textContent = d.deep_hours;
-  } catch (e) {
-    // Non-fatal: leave existing values in place if the refresh fails.
-  }
-}
-
 function appendEntryRow(entry) {
   if (!entry || !entry.id) return;
   const tbody = getHistoryBody();
@@ -132,7 +93,6 @@ function appendEntryRow(entry) {
   const row = buildEntryRow(entry);
   tbody.prepend(row);
   reindexEntryRows();
-  refreshTrackedStats();
 }
 
 function removeEntryRowById(entryId) {
@@ -144,7 +104,6 @@ function removeEntryRowById(entryId) {
 
   reindexEntryRows();
   ensureEmptyRowState();
-  if (row) refreshTrackedStats();
 }
 
 async function postFormJson(action, formData) {
@@ -162,30 +121,6 @@ async function postFormJson(action, formData) {
   }
 
   return response.json();
-}
-
-let applyingRemoteNotebook = false;
-
-function applyNotebookUpdate(payload) {
-  if (!payload || !payload.type) return;
-
-  const isQuick = payload.type === 'quick_note';
-  const textarea = document.getElementById(isQuick ? 'quick_note_area' : 'notebook_area');
-  const statusSpan = document.getElementById(isQuick ? 'status-quick' : 'status-book');
-
-  if (!textarea) return;
-
-  const incoming = payload.content || '';
-  if (textarea.value !== incoming) {
-    applyingRemoteNotebook = true;
-    textarea.value = incoming;
-    applyingRemoteNotebook = false;
-  }
-  textarea.dataset.lastRemoteValue = incoming;
-
-  if (statusSpan && payload.saved_at) {
-    statusSpan.innerText = 'Saved ' + payload.saved_at;
-  }
 }
 
 function setupAjaxEntryActions() {
@@ -263,11 +198,11 @@ function setupEventStream() {
     }
   });
 
-  source.addEventListener('notebook_updated', (event) => {
+  source.addEventListener('notebooks_updated', (event) => {
     try {
-      applyNotebookUpdate(JSON.parse(event.data));
+      applyNotebooksUpdate(JSON.parse(event.data));
     } catch (e) {
-      console.error('Failed to parse notebook_updated event', e);
+      console.error('Failed to parse notebooks_updated event', e);
     }
   });
 
@@ -350,27 +285,331 @@ function toggleRecording() {
 
 
 // ═══════════════════════════════════════════
-//  4. NOTEBOOK AUTOSAVE
+//  4. NOTEBOOK (multi-notebook + 书签栏)
 // ═══════════════════════════════════════════
 
-function saveNote(type, content, statusId) {
-  if (applyingRemoteNotebook) return;
+/* 数据形如 [{id, name, content}]，服务端保证至少有一本。
+   正文改动 debounce 后只提交当前这一本；增删改名各走各的接口，
+   服务端每次都回完整数组并通过 SSE 广播，跨标签页保持一致。 */
 
-  const statusSpan = document.getElementById(statusId);
-  if (statusSpan) statusSpan.innerText = 'Saving...';
+let notebooks = [];
+let activeNotebookId = null;
+let applyingRemoteNotebook = false;
 
-  fetch('/api/notes', {
+const ACTIVE_NB_STORAGE_KEY = 'onyx-active-notebook';
+
+function getActiveNotebook() {
+  return notebooks.find((b) => b.id === activeNotebookId) || null;
+}
+
+function setNotebookStatus(text) {
+  const el = document.getElementById('status-book');
+  if (el) el.innerText = text;
+}
+
+function rememberActiveNotebook(id) {
+  try {
+    localStorage.setItem(ACTIVE_NB_STORAGE_KEY, id);
+  } catch (e) {}
+}
+
+// 把当前这本的正文灌回 textarea，并同步"远端基准值"避免触发自动保存
+function paintActiveNotebook() {
+  const textarea = document.getElementById('notebook_area');
+  const book = getActiveNotebook();
+  if (!textarea || !book) return;
+
+  const content = book.content || '';
+  if (textarea.value !== content) {
+    applyingRemoteNotebook = true;
+    textarea.value = content;
+    applyingRemoteNotebook = false;
+  }
+  textarea.dataset.lastRemoteValue = content;
+}
+
+// ── 渲染书签栏 ──────────────────────────────────────────────
+
+function buildNotebookTab(book) {
+  const tab = document.createElement('button');
+  tab.type = 'button';
+  tab.className = 'nb-tab' + (book.id === activeNotebookId ? ' is-active' : '');
+  tab.dataset.id = book.id;
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('aria-selected', book.id === activeNotebookId ? 'true' : 'false');
+  // 图形上不写名字，名字只在悬停提示和删除确认里出现
+  tab.title = book.name;
+  tab.setAttribute('aria-label', book.name);
+
+  // 书签形：长方形 + 底边凹进一个三角
+  tab.innerHTML =
+    '<svg viewBox="0 0 24 24" width="15" height="15" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+
+  return tab;
+}
+
+function renderNotebookTabs() {
+  const strip = document.getElementById('nb-tab-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  notebooks.forEach((book) => strip.appendChild(buildNotebookTab(book)));
+
+  // 只剩一本时删除按钮置灰（后端也会拒绝）
+  const delBtn = document.getElementById('nb-del');
+  if (delBtn) {
+    delBtn.disabled = notebooks.length <= 1;
+    const active = getActiveNotebook();
+    delBtn.title = active ? 'Delete "' + active.name + '"' : 'Delete current notebook';
+  }
+}
+
+// ── 正文自动保存 ────────────────────────────────────────────
+
+let pendingNotebookSave = null;
+
+function saveNotebookContent(id, content) {
+  setNotebookStatus('Saving...');
+  return fetch('/api/notebooks/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, content }),
+    body: JSON.stringify({ id: id, content: content }),
   })
     .then((r) => r.json())
     .then((data) => {
-      if (statusSpan) statusSpan.innerText = 'Saved ' + data.saved_at;
+      setNotebookStatus(
+        data.status === 'success' ? 'Saved ' + data.saved_at : 'Error!'
+      );
     })
-    .catch(() => {
-      if (statusSpan) statusSpan.innerText = 'Error!';
+    .catch(() => setNotebookStatus('Error!'));
+}
+
+// 立刻把挂起的改动落盘（切换书签、删除、新建之前都要先冲一次，否则会丢字）
+function flushNotebookSave() {
+  if (!pendingNotebookSave) return;
+  const id = pendingNotebookSave.id;
+  const content = pendingNotebookSave.content;
+  pendingNotebookSave = null;
+
+  const book = notebooks.find((b) => b.id === id);
+  if (book) book.content = content;
+  saveNotebookContent(id, content);
+}
+
+const debouncedNotebookSave = debounce(() => flushNotebookSave(), 1000);
+
+// ── 切换 ────────────────────────────────────────────────────
+
+function switchNotebook(id) {
+  if (id === activeNotebookId) return;
+  flushNotebookSave();
+
+  activeNotebookId = id;
+  rememberActiveNotebook(id);
+  paintActiveNotebook();
+  renderNotebookTabs();
+}
+
+// ── 增 / 删 / 改名 ──────────────────────────────────────────
+
+// 三个结构性接口都回 {notebooks, active_id}，收尾逻辑是同一套
+function applyNotebookMutation(data) {
+  if (!data || data.status !== 'success') return false;
+
+  notebooks = data.notebooks || notebooks;
+  activeNotebookId = data.active_id || activeNotebookId;
+  rememberActiveNotebook(activeNotebookId);
+
+  paintActiveNotebook();
+  renderNotebookTabs();
+  if (data.saved_at) setNotebookStatus('Saved ' + data.saved_at);
+  return true;
+}
+
+async function createNotebook() {
+  flushNotebookSave();
+  try {
+    const res = await fetch('/api/notebooks/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     });
+    const data = await res.json();
+    if (!res.ok) {
+      setNotebookStatus(data.message || 'Error!');
+      return;
+    }
+    applyNotebookMutation(data);
+  } catch (e) {
+    setNotebookStatus('Error!');
+  }
+}
+
+async function deleteNotebook(id) {
+  // 被删的那本可能正挂着未保存的改动，直接丢掉，别再写回一本不存在的
+  if (pendingNotebookSave && pendingNotebookSave.id === id) {
+    pendingNotebookSave = null;
+  } else {
+    flushNotebookSave();
+  }
+
+  try {
+    const res = await fetch('/api/notebooks/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setNotebookStatus(data.message || 'Error!');
+      return;
+    }
+    applyNotebookMutation(data);
+  } catch (e) {
+    setNotebookStatus('Error!');
+  }
+}
+
+// ── 删除确认弹窗 ────────────────────────────────────────────
+
+let confirmResolver = null;
+
+function confirmDialog(message) {
+  const overlay = document.getElementById('confirm-overlay');
+  const text = document.getElementById('confirm-text');
+  const okBtn = document.getElementById('confirm-ok');
+  // 弹窗节点不在（比如别的页面复用了本脚本）就退回原生 confirm
+  if (!overlay || !text || !okBtn) return Promise.resolve(window.confirm(message));
+
+  text.textContent = message;
+  overlay.hidden = false;
+  okBtn.focus();
+
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+  });
+}
+
+function closeConfirmDialog(result) {
+  const overlay = document.getElementById('confirm-overlay');
+  if (overlay) overlay.hidden = true;
+  if (confirmResolver) {
+    const resolve = confirmResolver;
+    confirmResolver = null;
+    resolve(result);
+  }
+}
+
+function setupConfirmDialog() {
+  const overlay = document.getElementById('confirm-overlay');
+  if (!overlay) return;
+
+  const ok = document.getElementById('confirm-ok');
+  const cancel = document.getElementById('confirm-cancel');
+  if (ok) ok.addEventListener('click', () => closeConfirmDialog(true));
+  if (cancel) cancel.addEventListener('click', () => closeConfirmDialog(false));
+
+  // 点遮罩空白处 = 取消
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeConfirmDialog(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.hidden) closeConfirmDialog(false);
+  });
+}
+
+// ── 跨标签页：收到别处推来的变更 ────────────────────────────
+
+function applyNotebooksUpdate(payload) {
+  if (!payload || !Array.isArray(payload.notebooks)) return;
+
+  notebooks = payload.notebooks;
+
+  // 当前这本被别的标签页删掉了，就跟着服务端给的 active_id 走
+  if (!notebooks.some((b) => b.id === activeNotebookId)) {
+    activeNotebookId =
+      payload.active_id || (notebooks[0] && notebooks[0].id) || null;
+    rememberActiveNotebook(activeNotebookId);
+  }
+
+  renderNotebookTabs();
+  paintActiveNotebook();
+
+  if (payload.saved_at) setNotebookStatus('Saved ' + payload.saved_at);
+}
+
+// ── 初始化 ──────────────────────────────────────────────────
+
+function setupNotebooks() {
+  const dataEl = document.getElementById('notebooks-data');
+  const textarea = document.getElementById('notebook_area');
+  const strip = document.getElementById('nb-tab-strip');
+  if (!dataEl || !textarea || !strip) return;
+
+  try {
+    const parsed = JSON.parse(dataEl.textContent || '[]');
+    if (Array.isArray(parsed)) notebooks = parsed;
+  } catch (e) {
+    notebooks = [];
+  }
+  if (!notebooks.length) {
+    notebooks = [{ id: '1', name: 'Notebook', content: '' }];
+  }
+
+  // 优先恢复上次看的那本；没有或已被删掉就回到第一本
+  let restored = null;
+  try {
+    restored = localStorage.getItem(ACTIVE_NB_STORAGE_KEY);
+  } catch (e) {}
+  activeNotebookId = notebooks.some((b) => b.id === restored)
+    ? restored
+    : notebooks[0].id;
+
+  paintActiveNotebook();
+  renderNotebookTabs();
+
+  textarea.addEventListener('input', function () {
+    if (applyingRemoteNotebook) return;
+    pendingNotebookSave = { id: activeNotebookId, content: this.value };
+    debouncedNotebookSave();
+  });
+
+  // 切换：事件委托，书签每次 render 都会重建
+  strip.addEventListener('click', (e) => {
+    const tab = e.target.closest('.nb-tab');
+    if (tab) switchNotebook(tab.dataset.id);
+  });
+
+  const addBtn = document.getElementById('nb-add');
+  if (addBtn) addBtn.addEventListener('click', createNotebook);
+
+  // 叉号删的是当前选中的那本；弹窗里会写清楚是哪一本
+  const delBtn = document.getElementById('nb-del');
+  if (delBtn) {
+    delBtn.addEventListener('click', async () => {
+      const book = getActiveNotebook();
+      if (!book || notebooks.length <= 1) return;
+      const ok = await confirmDialog(
+        'Delete "' + book.name + '"? Its contents will be permanently lost.'
+      );
+      if (ok) deleteNotebook(book.id);
+    });
+  }
+
+  // 关页面前把还没落盘的改动送出去
+  window.addEventListener('beforeunload', () => {
+    if (!pendingNotebookSave) return;
+    try {
+      navigator.sendBeacon(
+        '/api/notebooks/save',
+        new Blob([JSON.stringify(pendingNotebookSave)], {
+          type: 'application/json',
+        })
+      );
+    } catch (e) {}
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -378,19 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventStream();
   ensureEmptyRowState();
   setupTodoList();
-
-  const bookInput = document.getElementById('notebook_area');
-
-  if (bookInput) {
-    bookInput.addEventListener(
-      'input',
-      debounce(function () {
-        if (applyingRemoteNotebook) return;
-        if (this.value === (this.dataset.lastRemoteValue || '')) return;
-        saveNote('notebook', this.value, 'status-book');
-      }, 1000)
-    );
-  }
+  setupConfirmDialog();
+  setupNotebooks();
 });
 
 
@@ -596,817 +824,10 @@ function setupTodoList() {
 
 
 // ═══════════════════════════════════════════
-//  5. DATA VISUALIZATION (Chart.js)
+//  5. PAGE INIT
 // ═══════════════════════════════════════════
 
-// Donut palette: an ordered set of muted, harmonious hues tuned for the dark
-// Obsidian theme. Slices are colored strictly by index, so no two slices in a
-// chart ever share a color (categories are only ever 3-6, well under the pool).
-const DONUT_PALETTE = [
-  '#6fa8dc', // soft blue
-  '#a78bda', // lavender
-  '#56b6a2', // teal
-  '#d4727a', // rose
-  '#c9a94e', // gold
-  '#e0976b', // warm peach
-  '#7fbf7b', // sage green
-  '#c98bbf', // mauve
-  '#5fa3b0', // slate cyan
-  '#b3925a', // bronze
-];
-
-// Bar chart uses one standard blue for every bar (per spec).
-const BAR_BLUE_SOLID = '#6fa8dc';
-const BAR_BLUE_LIGHT = 'rgba(111,168,220,0.15)';
-
-function donutColor(index) {
-  return DONUT_PALETTE[index % DONUT_PALETTE.length];
-}
-
-class VizChart {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.chart = null;
-    this.currentType = 'doughnut';
-    this.data = [];
-  }
-
-  _getColors() {
-    return this.data.map((_, i) => donutColor(i));
-  }
-
-  _buildBarGradients() {
-    // Single standard blue gradient, reused across all bars.
-    const g = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-    g.addColorStop(0, BAR_BLUE_SOLID);
-    g.addColorStop(1, BAR_BLUE_LIGHT);
-    return this.data.map(() => g);
-  }
-
-  _baseDataset() {
-    return {
-      data: this.data.map((c) => c.minutes),
-      borderWidth: 0,
-      hoverOffset: this.currentType === 'doughnut' ? 6 : 0,
-    };
-  }
-
-  _tooltipConfig() {
-    return {
-      enabled: true,
-      backgroundColor: 'rgba(22,27,34,0.95)',
-      titleColor: '#e6edf3',
-      bodyColor: '#8b949e',
-      padding: 12,
-      cornerRadius: 8,
-      displayColors: true,
-      callbacks: {
-        label: (ctx) => ` ${formatDuration(ctx.parsed.y || ctx.parsed)}`,
-      },
-    };
-  }
-
-  _doughnutConfig() {
-    return {
-      type: 'doughnut',
-      data: {
-        labels: this.data.map((c) => c.label),
-        datasets: [
-          {
-            ...this._baseDataset(),
-            backgroundColor: this._getColors(),
-            borderRadius: 4,
-            spacing: 3,
-            cutout: '64%',
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: this._tooltipConfig() },
-        animation: { animateRotate: true, duration: 700, easing: 'easeOutQuart' },
-      },
-    };
-  }
-
-  _barConfig() {
-    return {
-      type: 'bar',
-      data: {
-        labels: this.data.map((c) => c.label),
-        datasets: [
-          {
-            ...this._baseDataset(),
-            backgroundColor: this._buildBarGradients(),
-            borderRadius: { topLeft: 6, topRight: 6 },
-            barPercentage: 0.55,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { grid: { display: false }, ticks: { color: '#6e7681', font: { family: "'Inter'", size: 10 } } },
-          y: { beginAtZero: true, grid: { color: 'rgba(139,148,158,0.06)' }, ticks: { display: false } },
-        },
-        plugins: { legend: { display: false }, tooltip: this._tooltipConfig() },
-      },
-    };
-  }
-
-  render(type = 'doughnut') {
-    this.currentType = type;
-    if (this.chart) this.chart.destroy();
-    const cfg = type === 'bar' ? this._barConfig() : this._doughnutConfig();
-    this.chart = new Chart(this.ctx, cfg);
-  }
-
-  updateData(newData) {
-    this.data = newData;
-    this.render(this.currentType);
-  }
-}
-
-function buildLegend(container, categories) {
-  container.innerHTML = '';
-  const total = categories.reduce((s, c) => s + c.minutes, 0);
-  categories.forEach((cat, i) => {
-    const li = document.createElement('li');
-    li.className = 'viz-legend__item';
-    const pct = total > 0 ? ((cat.minutes / total) * 100).toFixed(0) : 0;
-    // Legend swatches mirror the donut's per-index colors so the two stay in sync.
-    li.innerHTML = `
-      <span class="viz-legend__swatch" style="background:${donutColor(i)}"></span>
-      ${escapeHtml(cat.label)}
-      <span class="viz-legend__value">${pct}%</span>`;
-    container.appendChild(li);
-  });
-}
-
-function showLoader(el, show) {
-  if (!el) return;
-  el.classList.toggle('is-visible', show);
-  el.setAttribute('aria-hidden', String(!show));
-}
-
-async function fetchChartData() { 
-  try {
-    const res = await fetch('/api/visualize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) throw new Error('No data');
-    const d = await res.json();
-    // Colors are assigned by slice index downstream, so we only need label + minutes.
-    const cats = d.labels.map((label, i) => ({ label, minutes: d.data[i] }));
-    return { categories: cats, total: d.total_minutes || cats.reduce((a, b) => a + b.minutes, 0) };
-  } catch {
-    return null;
-  }
-}
-
-// Fetch fresh telemetry and (re)render the chart, legend and total.
-async function loadVizChart(chart, refs) {
-  const { canvas, legend, totalEl, loader, emptyEl } = refs;
-
-  showLoader(loader, true);
-  const result = await fetchChartData();
-  showLoader(loader, false);
-
-  if (result && result.categories.length > 0) {
-    if (canvas) canvas.style.display = '';
-    chart.updateData(result.categories);
-    if (legend) buildLegend(legend, result.categories);
-    if (totalEl) totalEl.textContent = formatDuration(result.total);
-    if (emptyEl) emptyEl.classList.remove('is-visible');
-  } else {
-    // Show elegant empty state
-    if (legend) legend.innerHTML = '';
-    if (emptyEl) emptyEl.classList.add('is-visible');
-    if (totalEl) totalEl.textContent = '—';
-    if (canvas) canvas.style.display = 'none';
-  }
-}
-
-// Init chart on DOM ready
-document.addEventListener('DOMContentLoaded', async () => {
-  const canvas = document.getElementById('vizChart');
-  const legend = document.querySelector('.viz-legend');
-  const totalEl = document.getElementById('vizTotal');
-  const loader = document.querySelector('.viz-loader');
-  const emptyEl = document.getElementById('vizEmpty');
-  const toggles = document.querySelectorAll('.viz-toggle__btn');
-  const refreshBtn = document.getElementById('vizRefresh');
-
-  if (!canvas) return;
-  const chart = new VizChart(canvas);
-  const refs = { canvas, legend, totalEl, loader, emptyEl };
-
-  await loadVizChart(chart, refs);
-
-  // Manual refresh: re-pull telemetry without reloading the page.
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', async () => {
-      if (refreshBtn.classList.contains('is-spinning')) return;
-      refreshBtn.classList.add('is-spinning');
-      refreshBtn.disabled = true;
-      try {
-        await loadVizChart(chart, refs);
-      } finally {
-        refreshBtn.classList.remove('is-spinning');
-        refreshBtn.disabled = false;
-      }
-    });
-  }
-
-  // Toggle buttons
-  toggles.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const type = btn.dataset.chart;
-      if (chart.currentType === type) return;
-      toggles.forEach((b) => {
-        b.classList.remove('is-active');
-        b.setAttribute('aria-selected', 'false');
-      });
-      btn.classList.add('is-active');
-      btn.setAttribute('aria-selected', 'true');
-      chart.render(type);
-    });
-  });
-});
-
-
-// ═══════════════════════════════════════════
-//  6. NEURAL AUDIT HUD
-// ═══════════════════════════════════════════
-
-let currentAuditSession = null;
-
-async function runNeuralAudit() {
-  const btn = document.getElementById('audit-btn');
-  const contentArea = document.getElementById('hud-content');
-  const statusDot = document.getElementById('hud-status-dot');
-  const statusText = document.getElementById('hud-status-text');
-  const rlhfZone = document.getElementById('rlhf-zone');
-  const rubricEl = document.getElementById('hud-rubric');
-
-  const toneInput = document.querySelector('input[name="ai_tone"]:checked');
-  const selectedTone = toneInput ? toneInput.value : 'strict';
-
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
-  const clientTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} (${weekday})`;
-
-  btn.disabled = true;
-  btn.innerText = 'UPLINKING...';
-  statusDot.style.backgroundColor = 'var(--neon-yellow)';
-  statusDot.style.boxShadow = '0 0 10px var(--neon-yellow)';
-  statusText.innerText = 'Processing';
-
-  if (rlhfZone) rlhfZone.style.display = 'none';
-  if (rubricEl) rubricEl.style.display = 'none';
-
-  try {
-    const response = await fetch('/api/ai/audit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tone: selectedTone, client_time: clientTime }),
-    });
-    if (!response.ok) throw new Error('Connection Refused');
-    const data = await response.json();
-
-    const scoreEl = document.getElementById('hud-score-val');
-    scoreEl.innerText = data.score;
-    document.getElementById('hud-insight-text').innerText = data.insight;
-
-    const warnBox = document.getElementById('hud-warning-box');
-    if (data.warning && data.warning !== 'None') {
-      warnBox.style.display = 'flex';
-      document.getElementById('hud-warn-text').innerText = data.warning;
-    } else {
-      warnBox.style.display = 'none';
-    }
-
-    const colorMap = { green: 'var(--neon-green)', yellow: 'var(--neon-yellow)', red: 'var(--neon-red)' };
-    const activeColor = colorMap[data.status] || '#fff';
-    scoreEl.style.color = activeColor;
-    statusDot.style.backgroundColor = activeColor;
-    statusDot.style.boxShadow = `0 0 15px ${activeColor}`;
-    statusText.innerText = 'Online';
-
-    contentArea.style.display = 'flex';
-
-    // Render rubric summary
-    if (data.rubric && data.rubric.length > 0 && rubricEl) {
-      renderRubric(data.rubric, rubricEl);
-    }
-
-    btn.innerText = 'REFRESH DATA';
-
-    currentAuditSession = {
-      context: `Tone: ${selectedTone}`,
-      response: data.insight,
-    };
-
-    if (rlhfZone) {
-      rlhfLocked = false;
-      rlhfZone.classList.remove('is-submitted', 'is-cleared');
-      const scale = document.getElementById('rlhf-scale');
-      if (scale) {
-        scale.querySelectorAll('.rlhf-dot').forEach((d) => d.classList.remove('is-selected'));
-      }
-      rlhfZone.style.display = 'block';
-      rlhfZone.style.opacity = '0';
-      setTimeout(() => (rlhfZone.style.opacity = '1'), 400);
-    }
-  } catch (err) {
-    console.error(err);
-    btn.innerText = 'LINK FAILED';
-    statusDot.style.backgroundColor = 'var(--neon-red)';
-    contentArea.style.display = 'flex';
-    document.getElementById('hud-insight-text').innerText = 'System Failure: ' + err.message;
-    document.getElementById('hud-score-val').innerText = 'ERR';
-    document.getElementById('hud-score-val').style.color = 'var(--neon-red)';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-
-function renderRubric(dimensions, container) {
-  const grid = document.getElementById('hud-rubric-grid');
-  if (!grid) return;
-
-  grid.innerHTML = '';
-
-  const nameColors = {
-    'Task Completion': 'var(--accent-gold)',
-    'Focus & Depth': 'var(--accent-purple)',
-    'Time Discipline': 'var(--accent-blue)',
-    'Wellness & Balance': 'var(--accent-teal)',
-  };
-
-  dimensions.forEach(function (dim) {
-    const rawTotal = dim.points.reduce(function (sum, p) { return sum + p.score; }, 0);
-    const max = dim.points.length * 5;
-    const pct = Math.round((rawTotal / max) * 100);
-
-    var cell = document.createElement('div');
-    cell.className = 'rubric-cell';
-    cell.innerHTML =
-      '<span class="rubric-cell__name" style="color:' + (nameColors[dim.name] || 'var(--text-muted)') + '">' +
-        dim.name +
-      '</span>' +
-      '<span class="rubric-cell__score">' + rawTotal + '/' + max + '</span>' +
-      '<span class="rubric-cell__bar">' +
-        '<span class="rubric-cell__fill" style="width:' + pct + '%"></span>' +
-      '</span>';
-
-    cell.addEventListener('click', function () {
-      cell.classList.toggle('is-expanded');
-    });
-
-    // Expanded detail (tooltip-style)
-    var detail = document.createElement('div');
-    detail.className = 'rubric-cell__detail';
-    dim.points.forEach(function (p) {
-      var row = document.createElement('div');
-      row.className = 'rubric-point';
-      row.innerHTML =
-        '<span class="rubric-point__label">' + p.label + '</span>' +
-        '<span class="rubric-point__score">' + p.score + '/5</span>' +
-        '<span class="rubric-point__note">' + (p.note || '') + '</span>';
-      detail.appendChild(row);
-    });
-    cell.appendChild(detail);
-
-    grid.appendChild(cell);
-  });
-
-  container.style.display = 'block';
-}
-
-
-// RLHF feedback for Neural Audit — one vote per scan.
-let rlhfLocked = false;
-
-async function submitRLHF(score) {
-  if (!currentAuditSession || rlhfLocked) return; // ignore repeat clicks
-  rlhfLocked = true;
-
-  const zone = document.getElementById('rlhf-zone');
-  const scale = document.getElementById('rlhf-scale');
-
-  // Highlight the chosen dot (scores map 1,2,4,5 -> dots 0..3)
-  const scoreToIndex = { 1: 0, 2: 1, 4: 2, 5: 3 };
-  const dots = scale.querySelectorAll('.rlhf-dot');
-  dots.forEach((d, i) => d.classList.toggle('is-selected', i === scoreToIndex[score]));
-
-  try {
-    const res = await fetch('/api/alignment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: currentAuditSession.context,
-        response: currentAuditSession.response,
-        score: score,
-      }),
-    });
-    if (res.ok) {
-      // Swap dots -> "[ DATASET UPDATED ]" in the same spot; the dots are gone
-      // for good (no re-submission). After 3s the message fades out too.
-      zone.classList.add('is-submitted');
-      setTimeout(() => zone.classList.add('is-cleared'), 3000);
-    } else {
-      rlhfLocked = false; // let the user retry on failure
-      dots.forEach((d) => d.classList.remove('is-selected'));
-    }
-  } catch (e) {
-    console.error(e);
-    rlhfLocked = false;
-    dots.forEach((d) => d.classList.remove('is-selected'));
-  }
-}
-
-
-// ═══════════════════════════════════════════
-//  7. WEEKLY INSIGHT MODAL
-// ═══════════════════════════════════════════
-
-async function openWeeklyInsight() {
-  const modal = document.getElementById('insight-modal');
-  const card = document.getElementById('insight-card');
-
-  modal.style.display = 'flex';
-  setTimeout(() => card.classList.add('is-open'), 10);
-
-  // Reset feedback state
-  const fbBox = document.getElementById('insight-feedback-box');
-  const fbSuccess = document.getElementById('insight-feedback-success');
-  if (fbBox) { fbBox.style.display = 'block'; fbBox.style.opacity = '1'; fbBox.style.transform = 'none'; }
-  if (fbSuccess) { fbSuccess.style.display = 'none'; fbSuccess.classList.remove('is-visible'); }
-
-  // Loading state
-  document.getElementById('card-week-label').innerText = 'Establishing Uplink...';
-  document.getElementById('card-roast').innerText = 'Analyzing neural patterns...';
-
-  try {
-    const res = await fetch('/api/insights/weekly', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const data = await res.json();
-
-    if (data.status === 'error') {
-      alert(data.message);
-      closeInsight();
-      return;
-    }
-
-    // Map data to UI
-    document.getElementById('card-week-label').innerText = data.week_label || 'Unknown Protocol';
-    document.getElementById('card-achievement').innerText = data.achievement || 'No data.';
-    document.getElementById('card-advice').innerText = data.optimization_protocol || 'No advice generated.';
-    document.getElementById('card-phase').innerText = `STATUS: ${data.neural_phase || 'CALCULATING'}`;
-    document.getElementById('card-dw-ratio').innerText = `${data.deep_work_ratio || 0}%`;
-    document.getElementById('card-peak').innerText = data.peak_window || '--:--';
-    document.getElementById('card-roast').innerText = `"${data.roast || 'No anomalies detected.'}"`;
-
-    // Dynamic mood coloring
-    const color = data.primary_mood_color || '#3498db';
-
-    const colorBar = document.getElementById('card-color-bar');
-    if (colorBar) colorBar.style.backgroundColor = color;
-
-    const phaseTag = document.getElementById('card-phase');
-    if (phaseTag) {
-      phaseTag.style.color = color;
-      phaseTag.style.borderColor = color;
-      phaseTag.style.backgroundColor = hexToRgba(color, 0.1);
-    }
-
-    const roastBox = document.getElementById('card-roast-box');
-    if (roastBox) {
-      roastBox.style.borderLeftColor = color;
-      roastBox.style.backgroundColor = hexToRgba(color, 0.04);
-      const roastHeader = roastBox.querySelector('.modal-roast-box__header');
-      if (roastHeader) roastHeader.style.color = color;
-    }
-
-    const title = document.getElementById('card-week-label');
-    if (title) {
-      title.style.backgroundImage = `linear-gradient(45deg, #fff, ${color})`;
-      title.style.webkitBackgroundClip = 'text';
-      title.style.webkitTextFillColor = 'transparent';
-    }
-  } catch (e) {
-    console.error('Neural Link Failed:', e);
-    alert('Neural Link Severed: Check console for details.');
-    closeInsight();
-  }
-}
-
-function closeInsight() {
-  const modal = document.getElementById('insight-modal');
-  const card = document.getElementById('insight-card');
-  card.classList.remove('is-open');
-  setTimeout(() => (modal.style.display = 'none'), 250);
-}
-
-// RLHF feedback for Weekly Insight (ACCURATE / HALLUCINATION)
-async function submitInsightFeedback(score) {
-  const feedbackBox = document.getElementById('insight-feedback-box');
-  const successBox = document.getElementById('insight-feedback-success');
-
-  // Animate out buttons
-  if (feedbackBox) {
-    feedbackBox.style.opacity = '0';
-    feedbackBox.style.transform = 'translateY(-6px)';
-  }
-
-  setTimeout(() => {
-    if (feedbackBox) feedbackBox.style.display = 'none';
-    if (successBox) {
-      successBox.style.display = 'flex';
-      requestAnimationFrame(() => successBox.classList.add('is-visible'));
-    }
-  }, 300);
-
-  // Send to backend
-  try {
-    await fetch('/api/alignment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: 'Weekly Insight Report',
-        response: document.getElementById('card-week-label')?.innerText || '',
-        score: score,
-      }),
-    });
-  } catch (e) {
-    console.error('Feedback submission failed:', e);
-  }
-}
-
-
-// ═══════════════════════════════════════════
-//  8. POMODORO TIMER
-// ═══════════════════════════════════════════
-
-/* ── Pomodoro (backend-synced) ──────────────────────────────────────────── */
-
-const WORK_TIME = 25 * 60;
-const SHORT_BREAK = 3 * 60;
-const LONG_BREAK = 15 * 60;
-const CYCLES_BEFORE_LONG = 4;
-const AUTOSAVE_INTERVAL_MS = 15000;
-
-const PHASE_DURATIONS = { WORK: WORK_TIME, SHORT: SHORT_BREAK, LONG: LONG_BREAK };
-
-let pomoTimer = null;
-let pomoLeft = WORK_TIME;
-let isPomoRunning = false;
-let currentPhase = 'WORK';
-let cycleCount = 0;
-let autosaveHandle = null;
-
-const _phaseDuration = (p) => PHASE_DURATIONS[p] || WORK_TIME;
-
-const _pomoSnapshot = () => ({
-  remaining_seconds: pomoLeft,
-  phase: currentPhase,
-  cycle_count: cycleCount,
-  running: isPomoRunning,
-});
-
-const _saveToBackend = () => {
-  const blob = new Blob([JSON.stringify(_pomoSnapshot())], { type: 'application/json' });
-  navigator.sendBeacon('/api/pomodoro', blob);
-};
-
-const _startAutosave = () => {
-  _stopAutosave();
-  autosaveHandle = setInterval(() => {
-    if (isPomoRunning) _saveToBackend();
-  }, AUTOSAVE_INTERVAL_MS);
-};
-
-const _stopAutosave = () => {
-  if (autosaveHandle) { clearInterval(autosaveHandle); autosaveHandle = null; }
-};
-
-const _advancePhase = (overflowSeconds) => {
-  let remaining = overflowSeconds;
-  while (remaining >= 0) {
-    if (currentPhase === 'WORK') {
-      cycleCount++;
-      if (cycleCount >= CYCLES_BEFORE_LONG) {
-        currentPhase = 'LONG';
-        cycleCount = 0;
-      } else {
-        currentPhase = 'SHORT';
-      }
-    } else {
-      currentPhase = 'WORK';
-    }
-    const dur = _phaseDuration(currentPhase);
-    if (remaining < dur) { pomoLeft = dur - remaining; return; }
-    remaining -= dur;
-  }
-  pomoLeft = _phaseDuration(currentPhase);
-};
-
-const _updateStatusText = () => {
-  const el = document.getElementById('pomo-status-text');
-  if (!el) return;
-  if (currentPhase === 'WORK') {
-    el.innerText = '>>> READY TO FOCUS <<<';
-    el.style.color = '#ccc';
-  } else if (currentPhase === 'SHORT') {
-    el.innerText = '>>> STANDBY MODE (SHORT BREAK) <<<';
-    el.style.color = '#2ecc71';
-  } else {
-    el.innerText = '>>> SYSTEM COOLING (LONG BREAK) <<<';
-    el.style.color = '#3498db';
-  }
-};
-
-const _updatePomoButtonToPaused = () => {
-  const btn = document.getElementById('pomo-btn');
-  if (!btn) return;
-  btn.innerText = (pomoLeft === _phaseDuration(currentPhase) && cycleCount === 0 && currentPhase === 'WORK')
-    ? 'INITIALIZE SEQUENCE' : 'RESUME';
-  btn.style.background = 'transparent';
-  btn.style.borderColor = 'rgba(255,255,255,0.2)';
-};
-
-const loadPomodoroState = () => {
-  fetch('/api/pomodoro')
-    .then(r => r.json())
-    .then(data => {
-      if (!data.state) return;
-      const s = data.state;
-      pomoLeft = s.remaining_seconds;
-      currentPhase = s.phase;
-      cycleCount = s.cycle_count;
-      isPomoRunning = false;
-
-      if (s.running && s.paused_at) {
-        const elapsed = data.server_now - s.paused_at;
-        if (elapsed > 0) {
-          pomoLeft = pomoLeft - Math.floor(elapsed);
-          if (pomoLeft <= 0) _advancePhase(-pomoLeft);
-        }
-      }
-
-      _updateStatusText();
-      updateDots();
-      updatePomoDisplay();
-      _updatePomoButtonToPaused();
-    })
-    .catch(() => {});
-};
-
-window.addEventListener('beforeunload', () => {
-  _stopAutosave();
-  _saveToBackend();
-});
-
-function togglePomodoro() {
-  const btn = document.getElementById('pomo-btn');
-
-  if (!isPomoRunning) {
-    isPomoRunning = true;
-    btn.innerText = currentPhase === 'WORK' ? 'PAUSE FOCUS' : 'PAUSE BREAK';
-    btn.style.borderColor = 'rgba(255,255,255,0.5)';
-
-    pomoTimer = setInterval(() => {
-      if (pomoLeft > 0) {
-        pomoLeft--;
-        updatePomoDisplay();
-      } else {
-        handlePhaseComplete();
-      }
-    }, 1000);
-    _saveToBackend();
-  } else {
-    clearInterval(pomoTimer);
-    pomoTimer = null;
-    isPomoRunning = false;
-    btn.innerText = 'RESUME';
-    btn.style.borderColor = 'rgba(255,255,255,0.2)';
-    updatePomoDisplay();
-    _saveToBackend();
-  }
-}
-
-function handlePhaseComplete() {
-  clearInterval(pomoTimer);
-  pomoTimer = null;
-  isPomoRunning = false;
-
-  const btn = document.getElementById('pomo-btn');
-  const statusText = document.getElementById('pomo-status-text');
-
-  if (currentPhase === 'WORK') {
-    cycleCount++;
-    updateDots();
-    if (cycleCount >= CYCLES_BEFORE_LONG) {
-      currentPhase = 'LONG';
-      pomoLeft = LONG_BREAK;
-      statusText.innerText = '>>> SYSTEM COOLING (LONG BREAK) <<<';
-      statusText.style.color = '#3498db';
-      cycleCount = 0;
-    } else {
-      currentPhase = 'SHORT';
-      pomoLeft = SHORT_BREAK;
-      statusText.innerText = '>>> STANDBY MODE (SHORT BREAK) <<<';
-      statusText.style.color = '#2ecc71';
-    }
-  } else {
-    currentPhase = 'WORK';
-    pomoLeft = WORK_TIME;
-    statusText.innerText = '>>> READY TO FOCUS <<<';
-    statusText.style.color = '#ccc';
-    if (cycleCount === 0) updateDots();
-  }
-
-  updatePomoDisplay();
-  btn.innerText = 'START NEXT PHASE';
-  btn.style.background = 'transparent';
-  btn.style.borderColor = 'rgba(255,255,255,0.2)';
-
-  _saveToBackend();
-}
-
-function updatePomoDisplay() {
-  const display = document.getElementById('pomo-timer-display');
-  const btn = document.getElementById('pomo-btn');
-  if (!display || !btn) return;
-
-  const m = Math.floor(pomoLeft / 60);
-  const s = pomoLeft % 60;
-  display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  document.title = isPomoRunning
-    ? `(${m}:${s.toString().padStart(2, '0')}) Onyx`
-    : 'Onyx — Neural Engine';
-
-  const totalTime = _phaseDuration(currentPhase);
-  const progress = ((totalTime - pomoLeft) / totalTime) * 100;
-
-  if (btn.innerText !== 'START NEXT PHASE' && btn.innerText !== 'INITIALIZE SEQUENCE') {
-    btn.style.background = `linear-gradient(90deg, rgba(255,255,255,0.12) ${progress}%, transparent ${progress}%)`;
-  } else {
-    btn.style.background = 'transparent';
-  }
-}
-
-function updateDots() {
-  const container = document.getElementById('pomo-cycle-dots');
-  if (!container) return;
-  container.innerHTML = '';
-
-  for (let i = 0; i < CYCLES_BEFORE_LONG; i++) {
-    const dot = document.createElement('span');
-    dot.className = 'dot' + (i < cycleCount ? ' is-done' : '');
-    container.appendChild(dot);
-  }
-}
-
-/* ── Side Panel Toggle ─────────────────────────────────────── */
-function toggleSidePanel() {
-  var grid = document.querySelector('.bento-grid');
-  var btn = document.getElementById('panelToggle');
-  if (!grid || !btn) return;
-  var isOpen = grid.classList.toggle('side-panel--open');
-  btn.setAttribute('aria-expanded', isOpen);
-  try {
-    localStorage.setItem('onyx-side-panel', isOpen ? '1' : '0');
-  } catch (e) {}
-}
-
-// Init pomodoro on load: restore backend state first, then autosave
 document.addEventListener('DOMContentLoaded', () => {
-  loadPomodoroState();
-  _startAutosave();
-
-  /* ── Side Panel toggle: restore saved state ── */
-  (function initSidePanel() {
-    var grid = document.querySelector('.bento-grid');
-    var btn = document.getElementById('panelToggle');
-    if (!grid || !btn) return;
-    try {
-      if (localStorage.getItem('onyx-side-panel') === '1') {
-        grid.classList.add('side-panel--open');
-        btn.setAttribute('aria-expanded', 'true');
-      }
-    } catch (e) {}
-  })();
-
   /* ── Streak Check-in Toast auto-dismiss ── */
   const $toast = document.getElementById('streak-toast');
   if ($toast && $toast.classList.contains('streak-toast--show')) {

@@ -7,14 +7,14 @@ from model import db, UserProfile
 # --- Event constants ---
 EVENT_ENTRY_CREATED = 'entry_created'
 EVENT_ENTRY_DELETED = 'entry_deleted'
-EVENT_NOTEBOOK_UPDATED = 'notebook_updated'
+EVENT_NOTEBOOKS_UPDATED = 'notebooks_updated'
 EVENT_TODOS_UPDATED = 'todos_updated'
 EVENT_HEARTBEAT = 'heartbeat'
 
 EVENT_PAYLOAD_SCHEMA = {
     EVENT_ENTRY_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
     EVENT_ENTRY_DELETED: ('id',),
-    EVENT_NOTEBOOK_UPDATED: ('type', 'content', 'saved_at'),
+    EVENT_NOTEBOOKS_UPDATED: ('notebooks', 'active_id', 'saved_at'),
     EVENT_TODOS_UPDATED: ('todos', 'saved_at'),
 }
 
@@ -145,6 +145,80 @@ def todos_to_text(todos):
         mark = '[x]' if t.get('done') else '[ ]'
         lines.append(f"{mark} {t.get('text', '')}")
     return "\n".join(lines)
+
+
+# --- Notebook helpers ---
+# 多笔记本存成 JSON 数组 [{id, name, content}]，放在 User.notebooks 这个 Text 列里。
+# 至少永远保留一本：删到只剩一本时后端会拒绝，前端也不显示删除按钮，
+# 这样 load_notebooks() 的迁移分支就不会在清空后被二次触发。
+
+NOTEBOOK_NAME_MAX = 40
+NOTEBOOK_CONTENT_MAX = 100_000
+NOTEBOOK_MAX_COUNT = 30
+DEFAULT_NOTEBOOK_NAME = 'Notebook'
+
+
+def sanitize_notebooks(items):
+    """把任意输入整理成合法的 notebook 列表；非法项直接丢弃。"""
+    clean = []
+    if not isinstance(items, list):
+        return clean
+    seen_ids = set()
+    for it in items[:NOTEBOOK_MAX_COUNT]:
+        if not isinstance(it, dict):
+            continue
+        nb_id = str(it.get('id') or '').strip()
+        if not nb_id or nb_id in seen_ids:
+            nb_id = str(len(clean) + 1)
+            while nb_id in seen_ids:
+                nb_id = str(int(nb_id) + 1)
+        seen_ids.add(nb_id)
+
+        name = str(it.get('name', '')).strip()[:NOTEBOOK_NAME_MAX] or DEFAULT_NOTEBOOK_NAME
+        content = it.get('content', '')
+        if not isinstance(content, str):
+            content = ''
+
+        clean.append({
+            'id': nb_id,
+            'name': name,
+            'content': content[:NOTEBOOK_CONTENT_MAX],
+        })
+    return clean
+
+
+def load_notebooks(user):
+    """
+    读出该用户的 notebook 列表，保证至少有一本。
+
+    首次读取（notebooks 列还是空的）时，把旧的单栏 user.notebook 迁成第一本。
+    旧列本身不清空，留作迁移前的备份。
+    """
+    raw = user.notebooks
+    books = []
+    if raw:
+        try:
+            books = sanitize_notebooks(json.loads(raw))
+        except (ValueError, TypeError):
+            books = []
+
+    if not books:
+        legacy = user.notebook or ''
+        books = [{
+            'id': '1',
+            'name': DEFAULT_NOTEBOOK_NAME,
+            'content': legacy[:NOTEBOOK_CONTENT_MAX],
+        }]
+    return books
+
+
+def next_notebook_id(books):
+    """取一个当前没被占用的数字 id。"""
+    used = {b.get('id') for b in books}
+    n = len(books) + 1
+    while str(n) in used:
+        n += 1
+    return str(n)
 
 
 # --- Logical date helper ---

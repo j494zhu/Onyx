@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Onyx is a Flask time-tracking/productivity web app with AI-generated daily audits and weekly reports (DeepSeek API), real-time cross-tab sync (SSE + Redis pub/sub), and Chart.js visualizations. Frontend is vanilla JS + Jinja templates — no build step, no bundler.
+Onyx is a Flask time-tracking/productivity web app: session logging, a to-do list, tabbed multi-notebooks, a history/archive view, and real-time cross-tab sync (SSE + Redis pub/sub). Frontend is vanilla JS + Jinja templates — no build step, no bundler. **There is no AI left in the app** — every DeepSeek feature has been removed (see "Removed features").
 
 ## Commands
 
@@ -43,9 +43,9 @@ Pushing to `master` auto-deploys: GitHub Actions ([.github/workflows/deploy.yml]
 
 - **[app.py](app.py)** — single Flask app (no factory). The first three lines are gevent monkey-patching and **must stay first**. Sets up Redis client (`app.redis_client`, may be `None`), DB, login manager, then registers all blueprints. Also runs schema setup at import time.
 - **[model.py](model.py)** — SQLAlchemy models: `User`, `UserProfile`, `TimeEntry`, `AlignmentSignal`.
-- **[routes/](routes/)** — Flask blueprints, exported via [routes/__init__.py](routes/__init__.py): `auth`, `main` (dashboard + entry CRUD + end_day), `profile`, `notes`, `sse`, `ai` (DeepSeek endpoints), `data` (charts/stats).
+- **[routes/](routes/)** — Flask blueprints, exported via [routes/__init__.py](routes/__init__.py): `auth`, `main` (dashboard + entry CRUD + end_day + history), `profile`, `notes` (notebooks + todos), `sse`, `data` (pomodoro).
 - **[routes/common.py](routes/common.py)** — shared helpers: SSE event constants/publishing, todo (de)serialization, logical-date, profile loading, Redis rate limiting.
-- **[services/](services/)** — `prompts.py` (all DeepSeek prompt builders), `stats.py`, `streak.py`, `history_helper.py`.
+- **[services/](services/)** — `stats.py`, `streak.py`, `history_helper.py`.
 - **[static/scripts/](static/scripts/)** — vanilla JS modules; `dashboard.js` is the main one. **[templates/](templates/)** — Jinja pages.
 
 ### Domain quirks
@@ -53,23 +53,26 @@ Pushing to `master` auto-deploys: GitHub Actions ([.github/workflows/deploy.yml]
 - **`TimeEntry` maps to the legacy DB table `expenses`** (`__tablename__ = 'expenses'`) — the production database predates the rename and there is no migration framework. Never change this mapping without a data-migration plan; a test guards it.
 - **Logical date**: the day boundary is 06:00, not midnight — `get_logical_date()` assigns pre-6am activity to the previous day. Use it for anything date-scoped. **Two implementations exist with different return types**: [routes/common.py:152](routes/common.py#L152) returns a `date` (this is the one routes use, and what `TimeEntry.archive_date` expects), [services/stats.py:3](services/stats.py#L3) returns a `'%Y-%m-%d'` string. `tests/test_logical_date.py` guards that they agree; import the right one.
 - **Deleting an entry is `POST /api/entries/<id>`**, not `DELETE` — the form-post path and the AJAX path share one route ([routes/main.py:135](routes/main.py#L135)).
-- **"Deep work" is a hardcoded keyword list**, not AI — `deep_keywords` in [services/stats.py](services/stats.py) substring-matches `desc`. Separate from the AI category taxonomy stored in `TimeEntry.category`.
+- **"Deep work" is a hardcoded keyword list**, not AI — `DEEP_KEYWORDS` in [services/stats.py](services/stats.py) substring-matches `desc`. It is the single source for both the dashboard stats and the history page's `Focus %` (via `is_deep_work`); do not fork it.
+- **`TimeEntry.category` is dead weight** — no writer and no reader. The AI taxonomy endpoint that populated it (`POST /api/visualize`) and every consumer (history-page `#tag` chips, the category distribution bar, `category_minutes`/`top_category` in `build_day_stats`) have been removed. The column stays in [model.py:86](model.py#L86) only because dropping it is a schema change with no migration framework behind it and the production `expenses` table may have constraints this repo cannot see. Leave it unless you are ready to verify prod.
 - **Schema migration**: there is no migration framework. `db.create_all()` plus `ensure_user_columns()` in app.py, which idempotently `ALTER TABLE`s new `user` columns at startup (Postgres advisory lock guards multi-worker races). Adding a column to an existing table means adding it both to model.py and to `ensure_user_columns()`.
-- **JSON-in-Text columns**: `User.todos`, `User.pomodoro_state`, and several `UserProfile` fields store JSON as text; use the sanitize/load helpers in routes/common.py.
+- **JSON-in-Text columns**: `User.todos`, `User.notebooks`, `User.pomodoro_state`, and several `UserProfile` fields store JSON as text; use the sanitize/load helpers in routes/common.py.
+- **Multi-notebook**: `User.notebooks` holds `[{id, name, content}]`. Four endpoints in [routes/notes.py](routes/notes.py) — `/api/notebooks/save` (per-notebook content autosave, the hot path), `/create`, `/rename`, `/delete` — each writes the whole array and publishes one `notebooks_updated` SSE event carrying the full list plus an `active_id`. **`/rename` has no UI**: tabs are anonymous bookmark glyphs, so `name` is only auto-assigned (`Notebook N`) and surfaces in the tooltip and the delete-confirm text. The endpoint and its tests are kept as the re-add point if naming ever comes back. **There is always at least one notebook**: `/delete` refuses the last one (400) and the UI hides its `×`. That invariant is what stops `load_notebooks()` from re-running its migration branch.
+- **`User.notebook` (singular) is the pre-migration backup.** `load_notebooks()` seeds the first notebook from it the first time a user loads the dashboard, then never reads it again; nothing writes it any more. Do not delete the column — it is the only copy of pre-migration note content.
 
 ### Real-time sync (SSE)
 
 Production runs 4 gevent Gunicorn workers ([Dockerfile](Dockerfile)), so a user's browser tabs land on different workers — hence the Redis pub/sub fan-out rather than in-process broadcast. Mutations publish to Redis channel `onyx:user:<user_id>` via `publish_user_event()`; every worker holding that user's `GET /api/events` stream forwards the event to the browser. New event types must be added to `EVENT_PAYLOAD_SCHEMA` in routes/common.py or publishing is silently skipped. All Redis-dependent features (SSE, rate limiting) no-op gracefully when `app.redis_client` is `None`.
 
-### AI endpoints
+### Removed features
 
-`routes/ai.py` calls DeepSeek (`deepseek-v4-flash`) via raw `requests` POST in OpenAI-compatible format; prompts live in `services/prompts.py`. Three endpoints:
+The AI layer (DeepSeek) is gone: the daily **Neural Audit** (`POST /api/ai/audit`), the **taxonomy engine** (`POST /api/visualize`), and the **Weekly Intel** report (`POST /api/insights/weekly`) were all deleted, along with `routes/ai.py`, `services/prompts.py`, the `ai` blueprint, and `DEEPSEEK_API_KEY`. The Data Visualization, Data Matrix, Neural Audit and Pomodoro widgets are gone from the dashboard too. Check `git log` before re-adding anything here.
 
-- **`POST /api/ai/audit`** — daily audit. Per-user Redis rate limiting (3/min, 20/hour, set in app.py) plus a 15s session cooldown; user `juncheng` is exempt from both. The AI returns a rubric of weighted dimensions and the server recomputes `final_score` from it, then overrides `status` by score band (and forces `red` for 01:00–06:00 activity).
-- **`POST /api/visualize`** — taxonomy engine. Asks the model to bucket unarchived entries into 3–6 categories, then **writes the result back to `TimeEntry.category` and commits** — this endpoint mutates data, it isn't read-only.
-- **`POST /api/insights/weekly`** — weekly report. Still gathers logs and builds the real prompt, then **discards it and returns hardcoded mock data** after a `gevent.sleep(1.5)`; the live API call was never wired up ([routes/ai.py:307](routes/ai.py#L307)).
+Three things survive with **no caller** — kept deliberately, do not "clean up" without asking:
 
-User feedback on AI output is stored in `AlignmentSignal` (`reward_score` 1 = disliked, 5 = liked) and injected into the weekly prompt as few-shot examples.
+- **`AlignmentSignal` in [model.py](model.py)** — the RLHF feedback table. Its only writer (`POST /api/alignment`) and reader (the weekly prompt) are both gone, but the production table holds real collected rows and this model is the only handle on them.
+- **`_check_rate_limit()` in [routes/common.py](routes/common.py)** — guarded the deleted audit endpoint; Redis keys still read `rate:audit:*` and `RATE_LIMIT_PER_MINUTE`/`_PER_HOUR` remain in app.py. It is a working, tested Redis rate limiter worth keeping for the next endpoint that needs one.
+- **`GET`/`POST /api/pomodoro` in [routes/data.py](routes/data.py)** plus `User.pomodoro_state` — the widget was removed but the backend was explicitly retained for a future re-add.
 
 ## Gotchas
 

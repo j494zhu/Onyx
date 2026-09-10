@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from services.stats import is_deep_work
+
 
 def calculate_duration_minutes(start_str, end_str):
     """计算两个 HH:MM 时间字符串之间的分钟数"""
@@ -40,24 +42,20 @@ def calculate_duration_minutes(start_str, end_str):
 def build_day_stats(items):
     """接收一天的记录列表，返回聚合统计"""
     total_min = 0.0
-    category_min = {}
+    deep_min = 0.0
 
     for item in items:
         dur = calculate_duration_minutes(item.start_time, item.end_time)
         total_min += dur
-        cat = item.category or "Uncategorized"
-        category_min[cat] = category_min.get(cat, 0) + dur
+        if is_deep_work(item.desc):
+            deep_min += dur
 
-    deep_work_min = category_min.get("Deep Work", 0)
-    focus_pct = int(deep_work_min / total_min * 100) if total_min > 0 else 0
-    top_cat = max(category_min, key=category_min.get) if category_min else "—"
+    focus_pct = int(deep_min / total_min * 100) if total_min > 0 else 0
 
     return {
         'total_minutes': total_min,
         'total_hours': f"{total_min / 60:.1f}h",
-        'category_minutes': category_min,
         'focus_pct': focus_pct,
-        'top_category': top_cat,
         'entry_count': len(items),
     }
 

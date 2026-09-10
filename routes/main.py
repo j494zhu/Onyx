@@ -5,15 +5,14 @@ from itertools import groupby
 
 from flask import Blueprint, render_template, request, redirect, jsonify, Response
 from flask_login import login_required, current_user
-from model import db, User, TimeEntry, AlignmentSignal
+from model import db, User, TimeEntry
 
 from routes.common import (
     serialize_entry, is_ajax_request, publish_user_event,
     EVENT_ENTRY_CREATED, EVENT_ENTRY_DELETED,
     load_todos, migrate_quick_note_to_todos, get_logical_date,
-    load_user_profile,
+    load_user_profile, load_notebooks,
 )
-from services.stats import calculate_stats_from_logs
 from services.streak import update_user_streak
 from services.history_helper import build_day_stats
 
@@ -80,17 +79,18 @@ def index():
 
         entries = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).order_by(TimeEntry.timestamp.desc()).all()
 
-        total_h, deep_h = calculate_stats_from_logs(entries)
-
-        rlhf_count = AlignmentSignal.query.filter_by(user_id=current_user.id).count()
-
-        model_confidence = min(99, 75 + int(rlhf_count / 5))
-
         todos = load_todos(current_user)
         if not todos and (current_user.quick_note or '').strip():
             todos = migrate_quick_note_to_todos(current_user.quick_note)
             current_user.todos = json.dumps(todos)
             current_user.quick_note = ""
+            db.session.commit()
+
+        # 多 notebook：首次访问时把旧的单栏 user.notebook 迁进来并落库，
+        # 之后 notebooks 列就一直非空（至少一本），不会再走迁移分支。
+        notebooks = load_notebooks(current_user)
+        if not current_user.notebooks:
+            current_user.notebooks = json.dumps(notebooks)
             db.session.commit()
 
         profile = load_user_profile(current_user)
@@ -102,12 +102,12 @@ def index():
         return render_template(
             'index.html',
             entries=entries,
-            total_hours=total_h,
-            deep_hours=deep_h,
-            rlhf_count=rlhf_count,
-            model_confidence=model_confidence,
+            # 顶栏日期用逻辑日期（06:00 为分界），否则凌晨那几小时
+            # 表头显示的日子会和下面列出的记录对不上
+            logical_date=current_logical_date,
             todos=todos,
             todos_json=json.dumps(todos),
+            notebooks_json=json.dumps(notebooks),
             streak_incremented=streak_incremented,
             streak=current_user.streak,
             onboarding_needed=onboarding_needed,

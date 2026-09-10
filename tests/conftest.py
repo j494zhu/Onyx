@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import tempfile
@@ -16,12 +15,11 @@ _tmpdir = tempfile.mkdtemp(prefix='onyx_test_')
 os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(_tmpdir, 'test.db').replace('\\', '/')
 os.environ['SECRET_KEY'] = 'test-secret-key'
 os.environ['REDIS_URL'] = 'redis://127.0.0.1:1/0'
-os.environ['DEEPSEEK_API_KEY'] = 'test-deepseek-key'
 
 import pytest
 
 from app import app as flask_app
-from model import db, User, UserProfile, AlignmentSignal, TimeEntry
+from model import db, User, UserProfile, TimeEntry
 
 
 # --- Fake Redis（用于测试 SSE 发布和限流，不依赖真实 Redis） ---
@@ -137,15 +135,3 @@ def make_entry(user_id, desc='coding session', start='10:00', end='11:00',
     db.session.commit()
     return entry
 
-
-class DummyDeepSeekResponse:
-    """模拟 requests.post 返回的 DeepSeek 响应。"""
-
-    def __init__(self, content_obj):
-        self._content = content_obj
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return {'choices': [{'message': {'content': json.dumps(self._content)}}]}

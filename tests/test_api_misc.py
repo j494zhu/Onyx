@@ -1,40 +1,8 @@
-import json
 from datetime import date
 
-from model import AlignmentSignal
 from routes.common import _check_rate_limit
 
-from conftest import make_entry, get_user
-
-
-# --- /api/stats ---
-
-def test_stats_endpoint(auth_client):
-    make_entry(auth_client.user_id, desc='coding', start='10:00', end='11:00')
-    make_entry(auth_client.user_id, desc='nap', start='13:00', end='13:30')
-    resp = auth_client.get('/api/stats')
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data['total_minutes'] == 90
-    assert data['total_hours'] == 1.5
-    assert data['deep_hours'] == 1.0  # 只有 coding 命中深度关键词
-
-
-def test_stats_requires_login(client):
-    assert client.get('/api/stats').status_code == 302
-
-
-# --- /api/alignment ---
-
-def test_alignment_stores_signal(auth_client):
-    resp = auth_client.post('/api/alignment', json={
-        'context': 'Tone: strict', 'response': 'AI said X', 'score': 5,
-    })
-    assert resp.status_code == 200
-    signal = AlignmentSignal.query.filter_by(user_id=auth_client.user_id).first()
-    assert signal is not None
-    assert signal.reward_score == 5
-    assert signal.input_context == 'Tone: strict'
+from conftest import make_entry
 
 
 # --- /api/pomodoro ---
@@ -66,23 +34,6 @@ def test_pomodoro_save_bad_payload_uses_defaults(auth_client):
     state = auth_client.get('/api/pomodoro').get_json()['state']
     assert state['remaining_seconds'] == 1500
     assert state['phase'] == 'WORK'
-
-
-# --- /api/notes ---
-
-def test_save_notebook(auth_client):
-    resp = auth_client.post('/api/notes', json={
-        'type': 'notebook', 'content': 'permanent notes',
-    })
-    assert resp.status_code == 200
-    assert get_user('alice').notebook == 'permanent notes'
-
-
-def test_save_quick_note(auth_client):
-    auth_client.post('/api/notes', json={
-        'type': 'quick_note', 'content': 'temp note',
-    })
-    assert get_user('alice').quick_note == 'temp note'
 
 
 # --- /history ---
