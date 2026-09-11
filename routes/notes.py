@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
@@ -10,7 +9,7 @@ from routes.common import (
     EVENT_NOTEBOOKS_UPDATED, EVENT_TODOS_UPDATED,
     load_notebooks, next_notebook_id,
     NOTEBOOK_NAME_MAX, NOTEBOOK_CONTENT_MAX, NOTEBOOK_MAX_COUNT,
-    DEFAULT_NOTEBOOK_NAME,
+    DEFAULT_NOTEBOOK_NAME, now_local,
 )
 
 bp = Blueprint('notes', __name__)
@@ -21,7 +20,7 @@ def _persist_notebooks(books, active_id):
     current_user.notebooks = json.dumps(books)
     db.session.commit()
 
-    saved_at = datetime.now().strftime("%H:%M:%S")
+    saved_at = now_local().strftime("%H:%M:%S")
     publish_user_event(current_user.id, EVENT_NOTEBOOKS_UPDATED, {
         'notebooks': books,
         'active_id': active_id,
@@ -140,7 +139,7 @@ def save_todos():
     current_user.todos = json.dumps(todos)
     db.session.commit()
 
-    saved_at = datetime.now().strftime("%H:%M:%S")
+    saved_at = now_local().strftime("%H:%M:%S")
     publish_user_event(current_user.id, EVENT_TODOS_UPDATED, {
         'todos': todos,
         'saved_at': saved_at,

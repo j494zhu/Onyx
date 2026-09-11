@@ -244,6 +244,57 @@ updateDigitalClock();
 
 
 // ═══════════════════════════════════════════
+//  2b. HEADER DATE (rolls over at local midnight)
+// ═══════════════════════════════════════════
+// 顶栏日期/星期条按浏览器本地的自然日显示，零点自动翻页。
+// 这和 Archive Day 用的 06:00 逻辑日是两套独立逻辑，互不影响。
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday',
+                      'Thursday', 'Friday', 'Saturday'];
+
+function localIsoDate(d) {
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function updateHeaderDate() {
+  const dateEl = document.getElementById('dash-date');
+  const weekEl = document.getElementById('dash-week');
+  if (!dateEl || !weekEl) return;
+
+  const now = new Date();
+  const iso = localIsoDate(now);
+  if (dateEl.getAttribute('datetime') === iso) return;   // 日期没变，不动 DOM
+
+  dateEl.setAttribute('datetime', iso);
+  dateEl.textContent = `${MONTH_ABBR[now.getMonth()]} ${now.getDate().toString().padStart(2, '0')}, ${now.getFullYear()}`;
+  weekEl.setAttribute('aria-label', WEEKDAY_NAME[now.getDay()]);
+
+  const mondayFirst = (now.getDay() + 6) % 7;   // Mo=0 … Su=6，和模板的顺序一致
+  weekEl.querySelectorAll('.dash-week__day').forEach((el, i) => {
+    el.classList.toggle('is-today', i === mondayFirst);
+  });
+}
+
+function scheduleMidnightRollover() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+  setTimeout(() => {
+    updateHeaderDate();
+    scheduleMidnightRollover();
+  }, next - now);
+}
+
+// 定时器在电脑休眠时会被拖延，所以另外每 30 秒轻量对一次；日期没变就直接返回。
+updateHeaderDate();
+scheduleMidnightRollover();
+setInterval(updateHeaderDate, 30000);
+
+
+// ═══════════════════════════════════════════
 //  3. SESSION RECORDER
 // ═══════════════════════════════════════════
 

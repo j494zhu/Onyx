@@ -1,6 +1,6 @@
 from datetime import date
 
-from routes.common import _check_rate_limit
+from routes.common import _check_rate_limit, get_logical_date, now_local
 
 from conftest import make_entry
 
@@ -39,8 +39,9 @@ def test_pomodoro_save_bad_payload_uses_defaults(auth_client):
 # --- /history ---
 
 def test_history_day_mode_shows_archived(auth_client):
+    # history 的"今天"是逻辑日期（06:00 分界），凌晨跑测试时和 date.today() 不同
     make_entry(auth_client.user_id, desc='history-marker-123',
-               archived=True, archive_date=date.today())
+               archived=True, archive_date=get_logical_date(now_local()))
     resp = auth_client.get('/history')
     assert resp.status_code == 200
     assert 'history-marker-123' in resp.get_data(as_text=True)
@@ -48,7 +49,7 @@ def test_history_day_mode_shows_archived(auth_client):
 
 def test_history_week_mode(auth_client):
     make_entry(auth_client.user_id, desc='week-marker-456',
-               archived=True, archive_date=date.today())
+               archived=True, archive_date=get_logical_date(now_local()))
     resp = auth_client.get('/history?mode=week&offset=0')
     assert resp.status_code == 200
     assert 'week-marker-456' in resp.get_data(as_text=True)

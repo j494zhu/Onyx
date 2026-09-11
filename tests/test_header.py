@@ -1,7 +1,8 @@
 """顶栏日期 + 星期条。
 
-关键点：显示的是**逻辑日期**（06:00 为分界），不是自然日 ——
-凌晨那几个小时表头必须和下面列出的记录属于同一天。
+关键点：显示的是用户本地的**自然日**（零点翻页），和 Archive Day 用的
+逻辑日期（06:00 分界）是两套独立逻辑。服务端只负责首屏，之后由
+dashboard.js 在零点自动更新。
 """
 
 import re
@@ -28,12 +29,8 @@ def _parse(block):
 
 
 def _freeze(monkeypatch, when):
-    """把 routes.main 里的 datetime.now() 冻结到指定时刻。"""
-    class FrozenDatetime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return when
-    monkeypatch.setattr('routes.main.datetime', FrozenDatetime)
+    """把 routes.main 用的 now_local()（用户本地时间）冻结到指定时刻。"""
+    monkeypatch.setattr('routes.main.now_local', lambda: when)
 
 
 def test_old_title_is_gone(auth_client):
@@ -60,11 +57,12 @@ def test_highlight_matches_the_rendered_date(auth_client):
 @pytest.mark.parametrize('when, expected_date, expected_idx', [
     # 2026-09-10 是星期四（weekday 3）
     (datetime(2026, 9, 10, 12, 0), '2026-09-10', 3),   # 中午 -> 当天
-    (datetime(2026, 9, 10, 6, 0), '2026-09-10', 3),    # 06:00 整 -> 已算新的一天
-    (datetime(2026, 9, 10, 5, 59), '2026-09-09', 2),   # 05:59 -> 仍算前一天（周三）
-    (datetime(2026, 9, 10, 0, 30), '2026-09-09', 2),   # 午夜后 -> 仍算前一天
+    (datetime(2026, 9, 10, 6, 0), '2026-09-10', 3),    # 06:00 -> 当天
+    (datetime(2026, 9, 10, 5, 59), '2026-09-10', 3),   # 05:59 -> 自然日已是 10 号（不按 06:00 分界）
+    (datetime(2026, 9, 10, 0, 30), '2026-09-10', 3),   # 零点后 -> 已是新的一天
+    (datetime(2026, 9, 9, 23, 59), '2026-09-09', 2),   # 零点前 -> 还是 9 号（周三）
 ])
-def test_logical_date_boundary(auth_client, monkeypatch, when, expected_date, expected_idx):
+def test_calendar_date_boundary(auth_client, monkeypatch, when, expected_date, expected_idx):
     _freeze(monkeypatch, when)
     iso, letters, highlighted = _parse(_header(auth_client))
     assert iso == expected_date

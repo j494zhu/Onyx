@@ -1,7 +1,8 @@
 import json
 import re as _re
 from datetime import datetime, timedelta
-from flask import current_app
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from flask import current_app, request, has_request_context
 from model import db, UserProfile
 
 # --- Event constants ---
@@ -227,6 +228,38 @@ def get_logical_date(dt_obj):
     if dt_obj.hour < 6:
         return (dt_obj - timedelta(days=1)).date()
     return dt_obj.date()
+
+
+# --- 用户本地时间 ---
+#
+# 生产容器（python:3.12-slim）的系统时区是 UTC，直接用 datetime.now() 会让
+# 仪表盘的日期/星期在多伦多晚上 8 点左右就翻到第二天。这里改成：
+#   1. 浏览器把自己的 IANA 时区写进 cookie（见 templates/index.html 头部脚本）
+#   2. 后端校验后按该时区取"现在"
+#   3. 没有 cookie 或时区名非法，回落到多伦多
+# 返回 naive datetime，和库里 TimeEntry.timestamp（也是 naive 本地时间）保持一致，
+# get_logical_date() 可以直接吃。
+
+TZ_COOKIE = 'onyx_tz'
+DEFAULT_TZ = 'America/Toronto'
+_TZ_NAME_RE = _re.compile(r'^[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,3}$')
+
+
+def resolve_user_tz(name=None):
+    """把时区名解析成 ZoneInfo；name 为空时读 cookie；非法一律回落多伦多。"""
+    if name is None and has_request_context():
+        name = request.cookies.get(TZ_COOKIE)
+    if name and len(name) <= 64 and _TZ_NAME_RE.match(name):
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    return ZoneInfo(DEFAULT_TZ)
+
+
+def now_local():
+    """当前用户时区下的"现在"（naive datetime）。"""
+    return datetime.now(resolve_user_tz()).replace(tzinfo=None)
 
 
 # --- User Profile helpers ---

@@ -11,7 +11,7 @@ from routes.common import (
     serialize_entry, is_ajax_request, publish_user_event,
     EVENT_ENTRY_CREATED, EVENT_ENTRY_DELETED,
     load_todos, migrate_quick_note_to_todos, get_logical_date,
-    load_user_profile, load_notebooks,
+    load_user_profile, load_notebooks, now_local,
 )
 from services.streak import update_user_streak
 from services.history_helper import build_day_stats
@@ -27,7 +27,8 @@ def index():
         item_start = request.form.get('start_time')
         item_end = request.form.get('end_time')
 
-        logical_date = get_logical_date(datetime.now())
+        now = now_local()
+        logical_date = get_logical_date(now)
 
         try:
             item = TimeEntry(
@@ -36,7 +37,10 @@ def index():
                 end_time=item_end,
                 user_id=current_user.id,
                 is_archived=False,
-                archive_date=logical_date
+                archive_date=logical_date,
+                # 显式写用户本地时间，否则 model 默认值取的是容器的 UTC，
+                # 下面 index GET 里拿 timestamp 算逻辑日期时会串时区。
+                timestamp=now,
             )
             db.session.add(item)
             update_user_streak(current_user, logical_date)
@@ -54,7 +58,7 @@ def index():
             return f'Error: {str(e)}'
 
     else:
-        now = datetime.now()
+        now = now_local()
         current_logical_date = get_logical_date(now)
 
         active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
@@ -102,9 +106,10 @@ def index():
         return render_template(
             'index.html',
             entries=entries,
-            # 顶栏日期用逻辑日期（06:00 为分界），否则凌晨那几小时
-            # 表头显示的日子会和下面列出的记录对不上
-            logical_date=current_logical_date,
+            # 顶栏显示的是自然日（零点翻页），和 Archive Day 用的逻辑日期
+            # （06:00 分界）是两套独立逻辑。这里只负责首屏，之后由
+            # dashboard.js 的 updateHeaderDate() 在零点自动更新。
+            display_date=now.date(),
             todos=todos,
             todos_json=json.dumps(todos),
             notebooks_json=json.dumps(notebooks),
@@ -119,7 +124,7 @@ def index():
 def end_day():
     active_items = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).all()
 
-    current_logical_date = get_logical_date(datetime.now())
+    current_logical_date = get_logical_date(now_local())
 
     for item in active_items:
         item.is_archived = True
@@ -155,7 +160,7 @@ def delete(id):
 @bp.route('/api/export/today')
 @login_required
 def export_today():
-    logical_date = get_logical_date(datetime.now())
+    logical_date = get_logical_date(now_local())
     date_label = logical_date.strftime('%Y-%m-%d')
 
     entries = TimeEntry.query.filter_by(
@@ -214,7 +219,8 @@ def history():
     mode = request.args.get('mode', 'day')
     offset = request.args.get('offset', 0, type=int)
 
-    today = date.today()
+    # history 页按逻辑日期翻页：凌晨 5 点看的仍然是"昨天"
+    today = get_logical_date(now_local())
 
     if mode == 'week':
         current_monday = today - timedelta(days=today.weekday())

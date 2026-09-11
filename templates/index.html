@@ -19,6 +19,21 @@
       } catch (e) {}
     })();
   </script>
+  <!-- Timezone handshake: tell the server the browser's IANA zone so the
+       date / weekday / 06:00 logical-day boundary follow the user, not the
+       container's UTC clock. Server falls back to America/Toronto without it.
+       First visit has no cookie yet, so reload once if the zone differs. -->
+  <script>
+    (function () {
+      try {
+        var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (!tz) return;
+        var had = document.cookie.split('; ').some(function (c) { return c.indexOf('onyx_tz=') === 0; });
+        document.cookie = 'onyx_tz=' + encodeURIComponent(tz) + '; path=/; max-age=31536000; samesite=lax';
+        if (!had && tz !== 'America/Toronto') location.reload();
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- Fonts -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
@@ -44,13 +59,15 @@
   <!-- ═══ HEADER ═══════════════════════════════════════════ -->
   <header class="dash-header">
     <div class="dash-date">
-      <time class="dash-date__text" datetime="{{ logical_date.isoformat() }}">
-        {{ logical_date.strftime('%b %d, %Y') }}
+      {# 自然日（零点翻页），与 Archive Day 的 06:00 逻辑日无关。
+         服务端只出首屏，之后 dashboard.js 按浏览器本地时间在零点更新 #}
+      <time id="dash-date" class="dash-date__text" datetime="{{ display_date.isoformat() }}">
+        {{ display_date.strftime('%b %d, %Y') }}
       </time>
-      {# 星期条：周一起头，当天那一格提亮。日期用的是逻辑日期（06:00 分界） #}
-      <div class="dash-week" role="img" aria-label="{{ logical_date.strftime('%A') }}">
+      {# 星期条：周一起头，当天那一格提亮 #}
+      <div id="dash-week" class="dash-week" role="img" aria-label="{{ display_date.strftime('%A') }}">
         {% for letter in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] %}
-        <span class="dash-week__day{% if loop.index0 == logical_date.weekday() %} is-today{% endif %}"
+        <span class="dash-week__day{% if loop.index0 == display_date.weekday() %} is-today{% endif %}"
               aria-hidden="true">{{ letter }}</span>
         {% endfor %}
       </div>
@@ -185,7 +202,6 @@
 
     <!-- ─── ARCHIVE DAY ─── -->
     <section class="widget widget-archive">
-      <span class="archive-label">End of Watch?</span>
       <form action="/end_day" method="POST" onsubmit="return confirm('End Day? Quick Notes will be cleared.');">
         <button type="submit" class="btn-archive">Archive Day</button>
       </form>

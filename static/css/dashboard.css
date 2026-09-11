@@ -690,12 +690,6 @@ html.dark-mode .history-empty {
   border-radius: var(--radius-md);
 }
 
-.archive-label {
-  font-size: 0.65rem;
-  color: var(--text-ghost);
-  letter-spacing: 0.5px;
-}
-
 /* 静息态和 widget 标题 / 顶栏链接同色的虚化白，两种主题共用。
    （早先那版用哑光玫瑰暗示不可逆，现已按要求统一成白色。） */
 .btn-archive {
