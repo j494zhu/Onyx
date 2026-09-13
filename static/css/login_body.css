@@ -50,6 +50,28 @@ body {
     /*box-shadow: 0 6px 20px rgba(56, 239, 125, 0.2); /* 发一点绿色的光 */
 }
 
+/* 访客入口：次要按钮，透明底 + 细白边，不和绿色的 Login 抢主次 */
+.glass-container button.btn-guest {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: none;
+    color: white;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.glass-container button.btn-guest:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.guest-hint {
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 4px 0 0 0;
+}
+
 .glass-container {
     background: rgba(255, 255, 255, 0.15); /* 半透明背景 */
     backdrop-filter: blur(10px);          /* 核心：毛玻璃模糊效果 */

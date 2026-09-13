@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from model import db, User, UserProfile
+from routes.guest import delete_guest_users
 
 bp = Blueprint('auth', __name__)
 
@@ -51,5 +52,9 @@ def login():
 @bp.route('/logout')
 @login_required
 def logout():
+    guest_id = current_user.id if current_user.is_guest else None
     logout_user()
+    if guest_id is not None:
+        # 访客账号没有密码，登出后再也登不回来，数据留着也没用
+        delete_guest_users([guest_id])
     return redirect('/login')

@@ -35,6 +35,10 @@ class User(UserMixin, db.Model):
 
     pomodoro_state = db.Column(db.Text, default=None)
 
+    # 访客账号（登录页 "Continue without account" 创建），登出即删除；
+    # 逻辑见 routes/guest.py。
+    is_guest = db.Column(db.Boolean, default=False)
+
     profile = db.relationship('UserProfile', uselist=False, back_populates='user',
                               cascade='all, delete-orphan')
 

@@ -125,6 +125,14 @@ def ensure_user_columns():
         except Exception as exc:
             app.logger.info('Skipping adding user.todo_lists (likely a concurrent worker won the race): %s', exc)
 
+    if 'is_guest' not in existing_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(sa_text("ALTER TABLE \"user\" ADD COLUMN is_guest BOOLEAN DEFAULT FALSE"))
+            app.logger.info('Added missing column user.is_guest')
+        except Exception as exc:
+            app.logger.info('Skipping adding user.is_guest (likely a concurrent worker won the race): %s', exc)
+
 
 def initialize_database():
     with app.app_context():
@@ -145,9 +153,10 @@ def initialize_database():
 initialize_database()
 
 # --- Register Blueprints ---
-from routes import auth_bp, main_bp, profile_bp, notes_bp, sse_bp, data_bp
+from routes import auth_bp, guest_bp, main_bp, profile_bp, notes_bp, sse_bp, data_bp
 
 app.register_blueprint(auth_bp)
+app.register_blueprint(guest_bp)
 app.register_blueprint(main_bp)
 app.register_blueprint(profile_bp)
 app.register_blueprint(notes_bp)

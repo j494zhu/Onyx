@@ -6,6 +6,16 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/shake.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/login_body.css')}}">
+        <!-- Same timezone handshake as index.html, so a guest account's sample
+             sessions are generated in the visitor's local time, not the server's. -->
+        <script>
+            (function () {
+                try {
+                    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    if (tz) document.cookie = 'onyx_tz=' + encodeURIComponent(tz) + '; path=/; max-age=31536000; samesite=lax';
+                } catch (e) {}
+            })();
+        </script>
     </head>
     <body>
         
@@ -32,7 +42,12 @@
             <p style="text-align: center; margin-top: 20px;">
                 New here? <a href="/register">Register an account!</a>
             </p>
-            
+
+            <form action="/guest" method="POST">
+                <button type="submit" class="btn-guest">Continue without account</button>
+            </form>
+            <p class="guest-hint">A demo account with sample data, deleted when you log out.</p>
+
         </div>
         </body>
 </html>
