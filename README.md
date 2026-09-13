@@ -71,7 +71,7 @@ Backend: `app.py:236-243` (`get_logical_date`), also replicated in `services/sta
 ### 3. Auto-Archival & "End Day"
 
 - **Automatic**: when the user visits the homepage and the current logical date has advanced past an entry's logical date, that entry is marked `is_archived=True`. This happens naturally on page load after 6:00 AM.
-- **Manual**: the "Archive Day" button (`POST /end_day`) archives all active entries, clears the To-Do list, and resets the quick note field. The Notebook is preserved.
+- **Manual**: the "Archive Day" button (`POST /end_day`) archives all active entries (History Flow) and nothing else. The To-Do lists and the Notebook are preserved.
 
 The Podman service in `app.py` handles this logic at `GET /` route (lines 343-363).
 
@@ -101,7 +101,7 @@ A structured task list stored as a JSON array of `[{id, text, done}]` in the `Us
 - **Edit** text by double-clicking a task (inline editing).
 - **Delete** items via the × button.
 - **Auto-save** to backend on every change.
-- **Daily-cleared**: the To-Do list is cleared when the user archives the day.
+- **Persistent**: To-Do lists are not cleared when the user archives the day; tasks stay until the user deletes them.
 - **Legacy migration**: old `quick_note` free-text is automatically converted into todo items using regex parsing of numbered/bulleted lines.
 
 Backend: `app.py:613-628` (`POST /save_todos`), `app.py:196-222` (`migrate_quick_note_to_todos`).
@@ -235,7 +235,10 @@ Prints the total number of registered users. Implemented at `app.py:1078-1086`.
 | `GET` | `/logout` | ✓ | Log out current user |
 | `POST` | `/api/entries/<id>` | ✓ | Delete a time entry |
 | `POST` | `/api/notes` | ✓ | Save notebook or quick note text |
-| `POST` | `/api/todos` | ✓ | Persist To-Do checklist |
+| `POST` | `/api/todolists/save` | ✓ | Replace the items of one To-Do list (`{id, todos}`) |
+| `POST` | `/api/todolists/create` | ✓ | Create a To-Do list |
+| `POST` | `/api/todolists/rename` | ✓ | Rename a To-Do list |
+| `POST` | `/api/todolists/delete` | ✓ | Delete a To-Do list (refuses the last one) |
 | `GET` | `/api/events` | ✓ | SSE stream for real-time sync |
 | `POST` | `/api/ai/audit` | ✓ | Run daily Neural Audit (DeepSeek) |
 | `POST` | `/api/visualize` | ✓ | AI-powered session categorization + chart data |
@@ -260,9 +263,10 @@ The Neural Audit endpoint (`/api/ai/audit`) enforces a **15-second cooldown** be
 | `id` | Integer PK | |
 | `username` | String(100), unique | |
 | `password` | String(255) | PBKDF2:SHA256 hashed |
-| `quick_note` | Text | Daily note (cleared on archive) |
+| `quick_note` | Text | Legacy free-text note, migrated into to-dos on first dashboard load |
 | `notebook` | Text | Permanent notes |
-| `todos` | Text | JSON array `[{id, text, done}]` |
+| `todos` | Text | Legacy flat JSON array `[{id, text, done}]` (pre-migration backup) |
+| `todo_lists` | Text | JSON array `[{id, name, todos: [{id, text, done}]}]` |
 | `streak` | Integer | Consecutive days |
 | `last_check_in` | String(20) | ISO date of last activity |
 | `pomodoro_state` | Text | JSON state object |
@@ -449,7 +453,7 @@ Onyx supports real-time cross-tab and cross-device synchronization for the same 
 | `entry_created` | `{id, desc, start_time, end_time, timestamp}` | Prepends row to history table |
 | `entry_deleted` | `{id}` | Removes row from history table |
 | `notebook_updated` | `{type, content, saved_at}` | Updates textarea content |
-| `todos_updated` | `{todos, saved_at}` | Re-renders To-Do checklist |
+| `todolists_updated` | `{lists, active_id, saved_at}` | Re-renders To-Do list tabs + checklist |
 | `heartbeat` | `{ts}` | No-op (health check) |
 
 ### Safety Guards

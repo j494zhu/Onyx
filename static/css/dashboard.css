@@ -886,17 +886,23 @@ html.dark-mode .btn-archive:active {
 /* To-Do progress bar — 凹陷细轨 + 渐变填充 + 发光游标头 + 缓慢流光
    进度值由 JS 写入 --pct,填充宽度、游标位置、上方数字都从它派生,三者保证同步。
    数字浮在条子上方跟随移动,所以轨道可以撑满整个卡片宽度。 */
-/* 数字改为浮在轨道上方后,让它住进 widget__header 原有的下边距里,
-   而不是在其之上再堆一层空白 —— 所以这里收紧 header 的 margin 作为补偿。 */
-.widget-todo .widget__header {
-  margin-bottom: 4px;
+/* To-Do 卡片里的书签栏不画下分隔线,由进度条轨道占住那根线原来的位置:
+   书签栏盒子高 32px(按钮行 24 + 下内边距 8),原分隔线在 32–33px;
+   负的下外边距把进度条整体拉上来,轨道(4px)落在 31–35px,中线正对原分隔线。
+   Notebook 那一栏保留分隔线,两栏的书签高度仍然对齐。 */
+.widget-todo .nb-tabs {
+  border-bottom: none;
+  margin-bottom: -12px;           /* 32 + (-12) + 进度条上内边距 11 = 轨道顶 31 */
 }
 
 .todo-progress {
   --pct: 0%;
   position: relative;
   flex-shrink: 0;
-  padding-top: 13px;             /* 给上方浮动的数字让位 */
+  padding-top: 11px;             /* 给上方浮动的数字让位 */
+  /* 顶部让位区叠在书签栏下沿上(见上方负边距),进度条本身不可交互,
+     让点击穿透下去,书签和 +/× 按钮的下沿才点得到 */
+  pointer-events: none;
   /* 左端对齐下方复选框:.todo-item 的左内边距是 6px,轨道跟着缩进同样距离 */
   margin-left: 6px;
   margin-bottom: 12px;

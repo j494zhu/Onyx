@@ -117,6 +117,14 @@ def ensure_user_columns():
         except Exception as exc:
             app.logger.info('Skipping adding user.notebooks (likely a concurrent worker won the race): %s', exc)
 
+    if 'todo_lists' not in existing_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(sa_text("ALTER TABLE \"user\" ADD COLUMN todo_lists TEXT DEFAULT NULL"))
+            app.logger.info('Added missing column user.todo_lists')
+        except Exception as exc:
+            app.logger.info('Skipping adding user.todo_lists (likely a concurrent worker won the race): %s', exc)
+
 
 def initialize_database():
     with app.app_context():

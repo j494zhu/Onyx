@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
    ONYX NEURAL ENGINE — Dashboard Logic
-   Unified JS: Clock, Recorder, Notebook, To-Do
+   Unified JS: Clock, Recorder, Notebook, To-Do (both multi-tab)
    ══════════════════════════════════════════════════════════════ */
 
 // ═══════════════════════════════════════════
@@ -206,11 +206,11 @@ function setupEventStream() {
     }
   });
 
-  source.addEventListener('todos_updated', (event) => {
+  source.addEventListener('todolists_updated', (event) => {
     try {
-      applyTodosUpdate(JSON.parse(event.data));
+      applyTodoListsUpdate(JSON.parse(event.data));
     } catch (e) {
-      console.error('Failed to parse todos_updated event', e);
+      console.error('Failed to parse todolists_updated event', e);
     }
   });
 
@@ -526,13 +526,15 @@ async function deleteNotebook(id) {
 
 let confirmResolver = null;
 
-function confirmDialog(message) {
+function confirmDialog(message, title) {
   const overlay = document.getElementById('confirm-overlay');
   const text = document.getElementById('confirm-text');
   const okBtn = document.getElementById('confirm-ok');
+  const titleEl = document.getElementById('confirm-title');
   // 弹窗节点不在（比如别的页面复用了本脚本）就退回原生 confirm
   if (!overlay || !text || !okBtn) return Promise.resolve(window.confirm(message));
 
+  if (titleEl) titleEl.textContent = title || 'Delete';
   text.textContent = message;
   overlay.hidden = false;
   okBtn.focus();
@@ -643,7 +645,8 @@ function setupNotebooks() {
       const book = getActiveNotebook();
       if (!book || notebooks.length <= 1) return;
       const ok = await confirmDialog(
-        'Delete "' + book.name + '"? Its contents will be permanently lost.'
+        'Delete "' + book.name + '"? Its contents will be permanently lost.',
+        'Delete notebook'
       );
       if (ok) deleteNotebook(book.id);
     });
@@ -674,35 +677,192 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ═══════════════════════════════════════════
-//  4b. TO-DO CHECKLIST
+//  4b. TO-DO CHECKLIST (multi-list + 书签栏)
 // ═══════════════════════════════════════════
 
+/* 数据形如 [{id, name, todos: [{id, text, done}]}]，服务端保证至少有一个。
+   切换 / 新建 / 删除的逻辑和 UI 完全照搬 Notebook；每个 list 的进度条独立，
+   因为进度只从当前选中的那个 list 的 todos 算出来。
+   条目改动只提交当前这个 list；增删各走各的接口，服务端每次都回完整数组
+   并通过 SSE 广播，跨标签页保持一致。 */
+
+let todoLists = [];
+let activeTodoListId = null;
+// 当前选中 list 的条目数组（就是 getActiveTodoList().todos 的引用），渲染和编辑都作用在它上面
 let todoState = [];
 let applyingRemoteTodos = false;
+
+const ACTIVE_TD_STORAGE_KEY = 'onyx-active-todolist';
+
+function getActiveTodoList() {
+  return todoLists.find((l) => l.id === activeTodoListId) || null;
+}
+
+function setTodoStatus(text) {
+  const el = document.getElementById('status-quick');
+  if (el) el.innerText = text;
+}
+
+function rememberActiveTodoList(id) {
+  try {
+    localStorage.setItem(ACTIVE_TD_STORAGE_KEY, id);
+  } catch (e) {}
+}
+
+function normalizeTodos(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((t) => ({
+    id: String(t.id || makeTodoId()),
+    text: String(t.text || ''),
+    done: !!t.done,
+  }));
+}
+
+function normalizeTodoLists(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((l) => l && typeof l === 'object')
+    .map((l) => ({
+      id: String(l.id),
+      name: String(l.name || 'To-Do List'),
+      todos: normalizeTodos(l.todos),
+    }));
+}
+
+// 把当前这个 list 的条目接到 todoState 上并重绘（进度条随之切换）
+function paintActiveTodoList() {
+  const list = getActiveTodoList();
+  todoState = list ? list.todos : [];
+  renderTodos();
+}
 
 function makeTodoId() {
   return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
 }
 
+// ── 渲染书签栏 ──────────────────────────────────────────────
+
+function buildTodoListTab(list) {
+  const tab = document.createElement('button');
+  tab.type = 'button';
+  tab.className = 'nb-tab' + (list.id === activeTodoListId ? ' is-active' : '');
+  tab.dataset.id = list.id;
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('aria-selected', list.id === activeTodoListId ? 'true' : 'false');
+  tab.title = list.name;
+  tab.setAttribute('aria-label', list.name);
+
+  // 和 notebook 同一枚书签图形
+  tab.innerHTML =
+    '<svg viewBox="0 0 24 24" width="15" height="15" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+
+  return tab;
+}
+
+function renderTodoListTabs() {
+  const strip = document.getElementById('td-tab-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  todoLists.forEach((list) => strip.appendChild(buildTodoListTab(list)));
+
+  // 只剩一个时删除按钮置灰（后端也会拒绝）
+  const delBtn = document.getElementById('td-del');
+  if (delBtn) {
+    delBtn.disabled = todoLists.length <= 1;
+    const active = getActiveTodoList();
+    delBtn.title = active ? 'Delete "' + active.name + '"' : 'Delete current to-do list';
+  }
+}
+
+// ── 保存当前 list 的条目 ─────────────────────────────────────
+
 function saveTodos() {
   if (applyingRemoteTodos) return;
+  const list = getActiveTodoList();
+  if (!list) return;
+  list.todos = todoState;
 
-  const statusSpan = document.getElementById('status-quick');
-  if (statusSpan) statusSpan.innerText = 'Saving...';
+  setTodoStatus('Saving...');
 
-  fetch('/api/todos', {
+  fetch('/api/todolists/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ todos: todoState }),
+    body: JSON.stringify({ id: list.id, todos: todoState }),
   })
     .then((r) => r.json())
     .then((data) => {
-      if (statusSpan) statusSpan.innerText = 'Saved ' + data.saved_at;
+      setTodoStatus(data.status === 'success' ? 'Saved ' + data.saved_at : (data.message || 'Error!'));
     })
-    .catch(() => {
-      if (statusSpan) statusSpan.innerText = 'Error!';
-    });
+    .catch(() => setTodoStatus('Error!'));
 }
+
+// ── 切换 ────────────────────────────────────────────────────
+
+function switchTodoList(id) {
+  if (id === activeTodoListId) return;
+  activeTodoListId = id;
+  rememberActiveTodoList(id);
+  paintActiveTodoList();
+  renderTodoListTabs();
+}
+
+// ── 增 / 删 ─────────────────────────────────────────────────
+
+// 结构性接口都回 {lists, active_id}，收尾逻辑是同一套
+function applyTodoListMutation(data) {
+  if (!data || data.status !== 'success') return false;
+
+  if (Array.isArray(data.lists) && data.lists.length) {
+    todoLists = normalizeTodoLists(data.lists);
+  }
+  activeTodoListId = data.active_id || activeTodoListId;
+  rememberActiveTodoList(activeTodoListId);
+
+  paintActiveTodoList();
+  renderTodoListTabs();
+  if (data.saved_at) setTodoStatus('Saved ' + data.saved_at);
+  return true;
+}
+
+async function createTodoList() {
+  try {
+    const res = await fetch('/api/todolists/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setTodoStatus(data.message || 'Error!');
+      return;
+    }
+    applyTodoListMutation(data);
+  } catch (e) {
+    setTodoStatus('Error!');
+  }
+}
+
+async function deleteTodoList(id) {
+  try {
+    const res = await fetch('/api/todolists/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setTodoStatus(data.message || 'Error!');
+      return;
+    }
+    applyTodoListMutation(data);
+  } catch (e) {
+    setTodoStatus('Error!');
+  }
+}
+
+// ── 条目渲染 / 编辑 ──────────────────────────────────────────
 
 function renderTodos() {
   const list = document.getElementById('todo-list');
@@ -753,6 +913,7 @@ function renderTodos() {
   updateTodoProgress();
 }
 
+// 进度只看 todoState（= 当前 list 的条目），所以每个 list 的进度天然独立
 function updateTodoProgress() {
   const fill = document.getElementById('todo-progress-fill');
   const pctEl = document.getElementById('todo-progress-pct');
@@ -827,39 +988,56 @@ function editTodo(id, labelEl) {
   input.select();
 }
 
-function applyTodosUpdate(payload) {
-  if (!payload || !Array.isArray(payload.todos)) return;
+// ── 跨标签页：收到别处推来的变更 ────────────────────────────
+
+function applyTodoListsUpdate(payload) {
+  if (!payload || !Array.isArray(payload.lists)) return;
+
   applyingRemoteTodos = true;
-  todoState = payload.todos.map((t) => ({
-    id: String(t.id),
-    text: String(t.text || ''),
-    done: !!t.done,
-  }));
-  renderTodos();
-  applyingRemoteTodos = false;
+  todoLists = normalizeTodoLists(payload.lists);
 
-  const statusSpan = document.getElementById('status-quick');
-  if (statusSpan && payload.saved_at) statusSpan.innerText = 'Saved ' + payload.saved_at;
-}
-
-function setupTodoList() {
-  const dataEl = document.getElementById('todos-data');
-  if (dataEl) {
-    try {
-      const parsed = JSON.parse(dataEl.textContent || '[]');
-      if (Array.isArray(parsed)) {
-        todoState = parsed.map((t) => ({
-          id: String(t.id || makeTodoId()),
-          text: String(t.text || ''),
-          done: !!t.done,
-        }));
-      }
-    } catch (e) {
-      console.error('Failed to parse initial todos', e);
-    }
+  // 当前这个 list 被别的标签页删掉了，就跟着服务端给的 active_id 走
+  if (!todoLists.some((l) => l.id === activeTodoListId)) {
+    activeTodoListId =
+      payload.active_id || (todoLists[0] && todoLists[0].id) || null;
+    rememberActiveTodoList(activeTodoListId);
   }
 
-  renderTodos();
+  renderTodoListTabs();
+  paintActiveTodoList();
+  applyingRemoteTodos = false;
+
+  if (payload.saved_at) setTodoStatus('Saved ' + payload.saved_at);
+}
+
+// ── 初始化 ──────────────────────────────────────────────────
+
+function setupTodoList() {
+  const dataEl = document.getElementById('todo-lists-data');
+  const strip = document.getElementById('td-tab-strip');
+  if (!dataEl) return;
+
+  try {
+    todoLists = normalizeTodoLists(JSON.parse(dataEl.textContent || '[]'));
+  } catch (e) {
+    console.error('Failed to parse initial to-do lists', e);
+    todoLists = [];
+  }
+  if (!todoLists.length) {
+    todoLists = [{ id: '1', name: 'To-Do List', todos: [] }];
+  }
+
+  // 优先恢复上次看的那个；没有或已被删掉就回到第一个
+  let restored = null;
+  try {
+    restored = localStorage.getItem(ACTIVE_TD_STORAGE_KEY);
+  } catch (e) {}
+  activeTodoListId = todoLists.some((l) => l.id === restored)
+    ? restored
+    : todoLists[0].id;
+
+  paintActiveTodoList();
+  renderTodoListTabs();
 
   const form = document.getElementById('todo-add-form');
   const input = document.getElementById('todo-input');
@@ -871,7 +1049,29 @@ function setupTodoList() {
       input.focus();
     });
   }
+
+  // 切换：事件委托，书签每次 render 都会重建
+  if (strip) {
+    strip.addEventListener('click', (e) => {
+      const tab = e.target.closest('.nb-tab');
+      if (tab) switchTodoList(tab.dataset.id);
+    });
+  }
+
+  const addBtn = document.getElementById('td-add');
+  if (addBtn) addBtn.addEventListener('click', createTodoList);
+
+  // 叉号删的是当前选中的那个；弹窗里会写清楚是哪一个
+  const delBtn = document.getElementById('td-del');
+  if (delBtn) {
+    delBtn.addEventListener('click', async () => {
+      const list = getActiveTodoList();
+      if (!list || todoLists.length <= 1) return;
+      const ok = await confirmDialog(
+        'Delete "' + list.name + '"? Its tasks will be permanently lost.',
+        'Delete to-do list'
+      );
+      if (ok) deleteTodoList(list.id);
+    });
+  }
 }
-
-
-

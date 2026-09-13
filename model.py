@@ -22,8 +22,13 @@ class User(UserMixin, db.Model):
     # 多笔记本，存 JSON 数组 [{id, name, content}]；助手函数在 routes/common.py。
     notebooks = db.Column(db.Text, default=None)
 
-    # To-Do checklist stored as a JSON array of {id, text, done}.
+    # 旧的单栏 To-Do。已被 todo_lists 取代，仅作为迁移前的备份保留，
+    # 不再有任何写入方；迁移逻辑见 routes/common.py 的 load_todo_lists()。
     todos = db.Column(db.Text, default="[]")
+
+    # 多 To-Do list，存 JSON 数组 [{id, name, todos: [{id, text, done}]}]；
+    # 助手函数在 routes/common.py。
+    todo_lists = db.Column(db.Text, default=None)
 
     streak = db.Column(db.Integer, default=0)
     last_check_in = db.Column(db.String(20), default=None)

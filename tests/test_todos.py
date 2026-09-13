@@ -102,21 +102,8 @@ def test_todos_to_text_empty():
     assert todos_to_text([]) == ''
 
 
-# --- POST /api/todos ---
+# --- 旧的 POST /api/todos 已被 /api/todolists/save 取代，见 test_todo_lists.py ---
 
-def test_save_todos_persists_and_sanitizes(auth_client):
-    resp = auth_client.post('/api/todos', json={
-        'todos': [{'text': 'valid'}, {'text': ''}, 'junk'],
-    })
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data['status'] == 'success'
-    assert [t['text'] for t in data['todos']] == ['valid']
-
-    user = get_user('alice')
-    assert json.loads(user.todos) == data['todos']
-
-
-def test_save_todos_requires_login(client):
-    resp = client.post('/api/todos', json={'todos': []})
-    assert resp.status_code == 302
+def test_legacy_todos_endpoint_is_gone(auth_client):
+    resp = auth_client.post('/api/todos', json={'todos': []})
+    assert resp.status_code in (404, 405)

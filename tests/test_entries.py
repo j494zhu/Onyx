@@ -75,7 +75,7 @@ def test_delete_nonexistent_entry_404(auth_client):
     assert resp.status_code == 404
 
 
-def test_end_day_archives_and_clears_todos(auth_client):
+def test_end_day_archives_entries_only(auth_client):
     make_entry(auth_client.user_id)
     make_entry(auth_client.user_id, desc='second')
     user = get_user('alice')
@@ -90,8 +90,9 @@ def test_end_day_archives_and_clears_todos(auth_client):
     assert all(e.is_archived for e in entries)
     assert all(e.archive_date == get_logical_date(datetime.now()) for e in entries)
     user = get_user('alice')
-    assert user.todos == '[]'
-    assert user.quick_note == ''
+    # Archive Day 只存档 History Flow，其余字段原样保留
+    assert user.todos == '[{"id":"1","text":"task","done":false}]'
+    assert user.quick_note == 'note'
 
 
 def test_homepage_auto_archives_stale_entries(auth_client):

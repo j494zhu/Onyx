@@ -9,14 +9,14 @@ from model import db, UserProfile
 EVENT_ENTRY_CREATED = 'entry_created'
 EVENT_ENTRY_DELETED = 'entry_deleted'
 EVENT_NOTEBOOKS_UPDATED = 'notebooks_updated'
-EVENT_TODOS_UPDATED = 'todos_updated'
+EVENT_TODO_LISTS_UPDATED = 'todolists_updated'
 EVENT_HEARTBEAT = 'heartbeat'
 
 EVENT_PAYLOAD_SCHEMA = {
     EVENT_ENTRY_CREATED: ('id', 'desc', 'start_time', 'end_time', 'timestamp'),
     EVENT_ENTRY_DELETED: ('id',),
     EVENT_NOTEBOOKS_UPDATED: ('notebooks', 'active_id', 'saved_at'),
-    EVENT_TODOS_UPDATED: ('todos', 'saved_at'),
+    EVENT_TODO_LISTS_UPDATED: ('lists', 'active_id', 'saved_at'),
 }
 
 SSE_EVENT_NAMES = set(EVENT_PAYLOAD_SCHEMA.keys())
@@ -148,6 +148,74 @@ def todos_to_text(todos):
     return "\n".join(lines)
 
 
+# --- Multi To-Do list helpers ---
+# 多 To-Do list 存成 JSON 数组 [{id, name, todos}]，放在 User.todo_lists 这个 Text 列里。
+# 结构和多 notebook 完全一致：至少永远保留一个，删到只剩一个时后端拒绝、
+# 前端隐藏删除按钮，这样 load_todo_lists() 的迁移分支不会被二次触发。
+
+TODO_LIST_NAME_MAX = 40
+TODO_LIST_MAX_COUNT = 30
+DEFAULT_TODO_LIST_NAME = 'To-Do List'
+
+
+def sanitize_todo_lists(items):
+    """把任意输入整理成合法的 to-do list 数组；非法项直接丢弃。"""
+    clean = []
+    if not isinstance(items, list):
+        return clean
+    seen_ids = set()
+    for it in items[:TODO_LIST_MAX_COUNT]:
+        if not isinstance(it, dict):
+            continue
+        list_id = str(it.get('id') or '').strip()
+        if not list_id or list_id in seen_ids:
+            list_id = str(len(clean) + 1)
+            while list_id in seen_ids:
+                list_id = str(int(list_id) + 1)
+        seen_ids.add(list_id)
+
+        name = str(it.get('name', '')).strip()[:TODO_LIST_NAME_MAX] or DEFAULT_TODO_LIST_NAME
+        clean.append({
+            'id': list_id,
+            'name': name,
+            'todos': sanitize_todos(it.get('todos', [])),
+        })
+    return clean
+
+
+def load_todo_lists(user):
+    """
+    读出该用户的 to-do list 数组，保证至少有一个。
+
+    首次读取（todo_lists 列还是空的）时，把旧的单栏 user.todos 迁成第一个。
+    旧列本身不清空，留作迁移前的备份。
+    """
+    raw = user.todo_lists
+    lists = []
+    if raw:
+        try:
+            lists = sanitize_todo_lists(json.loads(raw))
+        except (ValueError, TypeError):
+            lists = []
+
+    if not lists:
+        lists = [{
+            'id': '1',
+            'name': DEFAULT_TODO_LIST_NAME,
+            'todos': load_todos(user),
+        }]
+    return lists
+
+
+def next_list_id(items):
+    """取一个当前没被占用的数字 id（notebook 和 to-do list 共用）。"""
+    used = {b.get('id') for b in items}
+    n = len(items) + 1
+    while str(n) in used:
+        n += 1
+    return str(n)
+
+
 # --- Notebook helpers ---
 # 多笔记本存成 JSON 数组 [{id, name, content}]，放在 User.notebooks 这个 Text 列里。
 # 至少永远保留一本：删到只剩一本时后端会拒绝，前端也不显示删除按钮，
@@ -214,12 +282,7 @@ def load_notebooks(user):
 
 
 def next_notebook_id(books):
-    """取一个当前没被占用的数字 id。"""
-    used = {b.get('id') for b in books}
-    n = len(books) + 1
-    while str(n) in used:
-        n += 1
-    return str(n)
+    return next_list_id(books)
 
 
 # --- Logical date helper ---

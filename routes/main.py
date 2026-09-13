@@ -11,7 +11,7 @@ from routes.common import (
     serialize_entry, is_ajax_request, publish_user_event,
     EVENT_ENTRY_CREATED, EVENT_ENTRY_DELETED,
     load_todos, migrate_quick_note_to_todos, get_logical_date,
-    load_user_profile, load_notebooks, now_local,
+    load_user_profile, load_notebooks, load_todo_lists, now_local,
 )
 from services.streak import update_user_streak
 from services.history_helper import build_day_stats
@@ -83,11 +83,21 @@ def index():
 
         entries = TimeEntry.query.filter_by(user_id=current_user.id, is_archived=False).order_by(TimeEntry.timestamp.desc()).all()
 
-        todos = load_todos(current_user)
-        if not todos and (current_user.quick_note or '').strip():
-            todos = migrate_quick_note_to_todos(current_user.quick_note)
-            current_user.todos = json.dumps(todos)
-            current_user.quick_note = ""
+        # 更早的 quick_note 自由文本先迁成旧的单栏 todos（只在多 list 列还没建立时），
+        # 紧接着再由 load_todo_lists() 把单栏 todos 迁成第一个 list。
+        if not current_user.todo_lists:
+            todos = load_todos(current_user)
+            if not todos and (current_user.quick_note or '').strip():
+                todos = migrate_quick_note_to_todos(current_user.quick_note)
+                current_user.todos = json.dumps(todos)
+                current_user.quick_note = ""
+                db.session.commit()
+
+        # 多 to-do list：和 notebooks 同一套迁移逻辑，首次访问落库后
+        # todo_lists 列就一直非空（至少一个），不会再走迁移分支。
+        todo_lists = load_todo_lists(current_user)
+        if not current_user.todo_lists:
+            current_user.todo_lists = json.dumps(todo_lists)
             db.session.commit()
 
         # 多 notebook：首次访问时把旧的单栏 user.notebook 迁进来并落库，
@@ -110,8 +120,7 @@ def index():
             # （06:00 分界）是两套独立逻辑。这里只负责首屏，之后由
             # dashboard.js 的 updateHeaderDate() 在零点自动更新。
             display_date=now.date(),
-            todos=todos,
-            todos_json=json.dumps(todos),
+            todo_lists_json=json.dumps(todo_lists),
             notebooks_json=json.dumps(notebooks),
             streak_incremented=streak_incremented,
             streak=current_user.streak,
@@ -130,9 +139,7 @@ def end_day():
         item.is_archived = True
         item.archive_date = current_logical_date
 
-    current_user.quick_note = ""
-    current_user.todos = "[]"
-
+    # 只存档 History Flow；To-Do list 和 Notebook 都不动。
     db.session.commit()
     return redirect('/')
 
@@ -167,7 +174,7 @@ def export_today():
         user_id=current_user.id, is_archived=False
     ).order_by(TimeEntry.timestamp.asc()).all()
 
-    todos = load_todos(current_user)
+    todo_lists = load_todo_lists(current_user)
 
     total_min = 0
     for e in entries:
@@ -195,15 +202,22 @@ def export_today():
     lines.append("")
     lines.append("TO-DO LIST")
     lines.append(dash)
-    if todos:
-        for i, t in enumerate(todos, 1):
-            mark = '[x]' if t['done'] else '[ ]'
-            lines.append(f"  {i:>2}. {mark}  {t['text']}")
-        done = sum(1 for t in todos if t['done'])
-        lines.append("")
-        lines.append(f"  Completed: {done}/{len(todos)}")
-    else:
-        lines.append("  -- No Tasks Yet --")
+    # 多个 list 时每个 list 单独列一段（带名字和各自的完成数）；只有一个时不加小标题。
+    for lst in todo_lists:
+        todos = lst['todos']
+        if len(todo_lists) > 1:
+            lines.append(f"  [{lst['name']}]")
+        if todos:
+            for i, t in enumerate(todos, 1):
+                mark = '[x]' if t['done'] else '[ ]'
+                lines.append(f"  {i:>2}. {mark}  {t['text']}")
+            done = sum(1 for t in todos if t['done'])
+            lines.append("")
+            lines.append(f"  Completed: {done}/{len(todos)}")
+        else:
+            lines.append("  -- No Tasks Yet --")
+        if len(todo_lists) > 1:
+            lines.append("")
 
     body = "\r\n".join(lines) + "\r\n"
     return Response(

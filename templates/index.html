@@ -189,7 +189,7 @@
 
     <!-- ─── ARCHIVE DAY ─── -->
     <section class="widget widget-archive">
-      <form action="/end_day" method="POST" onsubmit="return confirm('End Day? Quick Notes will be cleared.');">
+      <form action="/end_day" method="POST" onsubmit="return confirm('End Day? History Flow will be archived.');">
         <button type="submit" class="btn-archive">Archive Day</button>
       </form>
     </section>
@@ -198,8 +198,38 @@
     <section class="widget widget-todo">
       <header class="widget__header">
         <h3 class="widget__title"># To-Do List</h3>
-        <span id="status-quick" class="widget__badge">Daily Cleared</span>
+        <span id="status-quick" class="widget__badge">Permanent</span>
       </header>
+
+      <!-- 书签栏：和 Notebook 完全同一套（同样的 CSS 类），
+           图形由 JS 依据 #todo-lists-data 渲染；加号/叉号常驻最右，叉号作用于当前选中的那个 list -->
+      <div class="nb-tabs" id="td-tabs">
+        <div class="nb-tabs__strip" id="td-tab-strip" role="tablist" aria-label="To-do lists"></div>
+        <div class="nb-tabs__actions">
+          <button
+            type="button"
+            id="td-add"
+            class="nb-btn"
+            title="New to-do list"
+            aria-label="New to-do list">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="td-del"
+            class="nb-btn nb-btn--del"
+            title="Delete current to-do list"
+            aria-label="Delete current to-do list">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <!-- To-Do progress: done/total. 进度写在 --pct 上（见 updateTodoProgress）,
            百分比浮在轨道上方跟随移动；is-zero 是渲染前的默认态,防止 0% 时先闪出游标头。 -->
@@ -225,8 +255,8 @@
           aria-label="Add a task">
       </form>
 
-      <!-- Initial checklist state injected by the server -->
-      <script id="todos-data" type="application/json">{{ todos_json | safe }}</script>
+      <!-- Initial to-do lists state injected by the server -->
+      <script id="todo-lists-data" type="application/json">{{ todo_lists_json | safe }}</script>
     </section>
 
     <!-- ─── NOTEBOOK ─── -->
@@ -277,10 +307,10 @@
 
   </main>
 
-  <!-- ═══ CONFIRM DIALOG (notebook delete) ═══════════════════ -->
+  <!-- ═══ CONFIRM DIALOG (notebook / to-do list delete) ═══════ -->
   <div id="confirm-overlay" class="confirm-overlay" hidden>
     <div class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-      <h4 id="confirm-title" class="confirm-card__title">Delete notebook</h4>
+      <h4 id="confirm-title" class="confirm-card__title">Delete</h4>
       <p id="confirm-text" class="confirm-card__text"></p>
       <div class="confirm-card__actions">
         <button type="button" id="confirm-cancel" class="confirm-btn">Cancel</button>
