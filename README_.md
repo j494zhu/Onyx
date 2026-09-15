@@ -1,166 +1,96 @@
-# Onyx | AI-Powered Productivity & Analytics Platform
+# Onyx
 
-[![Deployed on DigitalOcean](https://img.shields.io/badge/Deployed-DigitalOcean-blue?logo=digitalocean)](https://onyx.j494zhu.com/login?next=%2F)
-[![Python & Flask](https://img.shields.io/badge/Backend-Flask%20%7C%20SQLAlchemy-3776AB?logo=python&logoColor=white)]()
-[![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS%20%7C%20Chart.js-F7DF1E?logo=javascript&logoColor=black)]()
+A self-hosted daily time-tracking and planning app. You log what you worked on and when, keep a few to-do lists and notebooks next to it, and review past days or weeks. Open it in two tabs (or on two devices) and edits show up in both without refreshing.
 
-**[🔴 Live Demo: onyx.j494zhu.com](https://onyx.j494zhu.com/login?next=%2F)** Onyx is a full-stack, AI-augmented analytics and time-management platform. Evolving beyond static productivity tools, Onyx integrates a proprietary **Human-in-the-Loop (HITL)** machine learning pipeline to continuously align its generative AI suggestions with user-specific workflows and preferences.
+Live instance: **https://onyx.j494zhu.com** — the login page has a *Continue without account* button that creates a throwaway guest account pre-filled with sample data, so you can try everything without registering.
 
-![Onyx Dashboard Light Mode](demo_images/index-light.png)
-*(Onyx Dashboard in Light Mode: Subpixel-perfect glassmorphism and real-time telemetry)*
+Backend is Flask + SQLAlchemy; frontend is Jinja templates and plain JavaScript with no build step. Production runs on Gunicorn (gevent workers), PostgreSQL and Redis inside Docker Compose, deployed automatically from `master`.
 
-## ✨ Core Features & System Modules
+## What it does
 
-Onyx is engineered as a unified workspace, seamlessly blending manual telemetry with automated AI insights.
+- **Session log** – record an activity with a start and end time, either by filling in the form or by pressing *Start Session* / *Stop & Log* to capture the current time. Today's entries appear in the *History Flow* panel; each can be deleted inline.
+- **Logical days** – a day rolls over at 06:00, not midnight, so a session that ends at 01:30 still belongs to the previous evening. Entries from earlier days are archived automatically when you next open the dashboard; *Archive Day* does it on demand.
+- **History** – browse archived sessions by day or by week, with per-day totals and a rough "focus" percentage based on keywords in the descriptions.
+- **To-do lists and notebooks** – multiple tabbed to-do lists and multiple tabbed notebooks per user. Notebook text auto-saves after a short debounce. Neither is cleared when a day is archived.
+- **Daily export** – download today's sessions and to-dos as a plain-text file.
+- **Profile and onboarding** – a short questionnaire on first login (typical wake-up time, meal windows, goals) stored in a `UserProfile` row.
+- **Dark mode** – follows the OS preference, can be overridden, and applies before first paint to avoid a white flash.
+- **Guest mode** – one click creates an isolated guest account seeded with a week of sample history. Guests are deleted on logout, and stale guests (older than 24 h) are purged the next time someone enters as a guest.
 
-### ⏱️ Session Telemetry & Automated Archival
-* **History Flow Engine:** Users input active tasks to track session duration. The system dynamically logs these entries into the database via async requests.
-* **Smart Archival Pipeline:** Users can manually trigger `Archive Day` to close out their workflow. To prevent data leakage across days, a scheduled background job automatically archives unclosed sessions at **6:00 AM daily**.
+## Real-time sync across tabs and workers
 
-![Onyx History Flow](demo_images/history.png)
-*(Comprehensive History Flow and Session Tracking)*
+Every mutation (entry created or deleted, notebooks saved, to-do lists saved) is published to a per-user Redis channel (`onyx:user:<id>`). Each browser tab holds an open Server-Sent Events stream at `GET /api/events`; the handler subscribes to that user's channel and forwards events to the client.
 
-### 📊 Real-Time Analytics & Data Matrix
-* **Dynamic Visualization:** Integrated `Chart.js` to render stateful Donut and Bar charts that auto-update the moment a new session is logged, categorizing time spent (e.g., Deep Work, Study, Coding).
-* **Quantified Self Matrix:** A dedicated telemetry dashboard tracking critical metrics: Total Logged Hours, Deep Work ratio, Login Streaks, and the growing **RLHF Dataset Confidence Score** representing the AI's training progress.
+Redis pub/sub is what makes this work with four Gunicorn workers: the tab that made the change and the tab that needs to hear about it are usually being served by different processes, so an in-process broadcast would not reach them. Heartbeats go out every 25 s to keep proxies from closing idle connections; `X-Accel-Buffering: no` stops Nginx from buffering the stream.
 
-### 📝 Persistent Task & Focus Management
-* **To-Do & Permanent Notebook:** A daily-cleared task list coupled with a persistent notebook for fleeting thoughts, system designs, and long-term knowledge retention.
-* **Pomodoro Sequence:** A built-in focus protocol optimized for 25-minute deep work sessions and 3-minute recovery blocks.
+If Redis is unreachable the app keeps working — publishes are skipped with a warning and the SSE endpoint returns a single `redis_unavailable` heartbeat — so the dev setup does not need Redis at all.
 
----
+Relevant code: `routes/sse.py` (stream), `routes/common.py` (`publish_user_event`, event schema), `static/scripts/dashboard.js` (`EventSource` handlers).
 
-## 🏗️ Architecture & Deployment
+## Deployment
 
-### Scalable Backend
-* **Production Deployment:** Hosted on a **DigitalOcean Droplet** and served via **Gunicorn** for robust, multi-threaded request handling.
-* **Relational Mapping:** Utilizes `SQLAlchemy` for complex relational queries, secure user authentication (Login/Register), and persistent history tracking.
+`docker-compose.yml` runs three services: `web` (this app, built from the `Dockerfile`, bound to `127.0.0.1:5000` and reverse-proxied by Nginx on the host), `postgres:16-alpine` with a health check, and `redis:alpine` started with `--requirepass`. Both passwords are required (`${VAR:?...}`), so a missing `.env` value aborts startup instead of falling back to a default.
 
-### Immersive Frontend
-* **Dynamic Theme Engine:** Integrated a seamless Light/Dark mode toggle accessible from the top navigation bar, adapting the UI instantly to user environmental preferences.
-* **Subpixel-Perfect Glassmorphism:** Engineered a robust, modern UI featuring a frosted glass aesthetic. Successfully debugged and resolved complex subpixel rounding errors across different display scaling environments.
+Pushing to `master` triggers `.github/workflows/deploy.yml`, which SSHes to the server, resets the checkout to `origin/master` and runs `docker compose up -d --build`. `.env` is not tracked and lives only on the server. `SERVER_HANDOFF.md` documents the operational steps (password rotation, migrations, what not to run on a live volume).
 
-![Onyx Dashboard Dark Mode](demo_images/index-dark.png)
-*(Onyx Dashboard dynamically rendered in Dark Mode)*
+Static URLs get a `?v=<mtime>` query string so browsers and Nginx pick up new CSS/JS after a deploy.
 
----
+## Schema changes without a migration tool
 
-## 🤖 Adaptive AI: Human-in-the-Loop Feedback System
+The project has no Alembic. Instead, the schema has evolved in place against a live database:
 
-Traditional productivity tools give static, one-size-fits-all advice. Onyx **learns from you**.
+- On startup `initialize_database()` runs `db.create_all()` under a PostgreSQL advisory lock so that four workers starting at once do not race each other.
+- `ensure_user_columns()` then adds any missing columns (`todos`, `pomodoro_state`, `notebooks`, `todo_lists`, `is_guest`) with idempotent `ALTER TABLE ... ADD COLUMN`; if another worker wins the race the error is logged and ignored.
+- Features that changed shape were migrated lazily on first read. The single free-text note became a list of to-dos (regex over numbered/bulleted lines); the single to-do list and single notebook each became a JSON array of named tabs. Old columns are kept as a backup and no longer written to.
+- The `expenses` table name is a leftover from the project's origin and is kept because the production data lives there.
 
-Every interaction with the **Daily Neural Audit** and the **Weekly Intel** feeds into a **closed-loop feedback pipeline** that continuously adapts the AI's behavior using Active Learning principles.
+This was a deliberate trade-off for a single-developer project with a small schema. If the schema kept growing, adopting Alembic would be the next step.
 
-![Onyx Weekly Intel](demo_images/weekly-intel.png)
-*(Weekly Intel Report with integrated RLHF Feedback Module)*
+## Time zones
 
-### Context-Aware Analytics (with RLHF)
-* **Tri-Modal AI Feedback:** Users can select the AI's persona tone (`Strict`, `Roast`, or `Gentle`). The engine cross-references the user's daily `To-Do List` against their actual `History Flow` and `Deep Work` metrics to generate a customized Productivity Score (0-100) and actionable advice.
-* **Macro-Analysis (Weekly Intel):** Synthesizes 7-day telemetry data into comprehensive weekly reviews, identifying long-term bottlenecks and productivity trends.
-* **Train Neural Twin (Feedback Loop):** Users rate both the Daily Audit and Weekly Intel using a simplified emoji scale (😖, 😐, 🤩). This feedback increments the RLHF dataset, actively shaping future prompt generation.
+The container runs in UTC. The browser writes its IANA time zone into a cookie on first load; the backend validates the name, resolves it with `zoneinfo`, and uses it for "now", the logical-date boundary and entry timestamps. Invalid or missing values fall back to `America/Toronto`.
 
-### Architecture Flow
+## Tests
 
-```text
-┌─────────────┐     ┌──────────────┐     ┌──────────────────┐
-│  User Logs  │────▶│ Neural Audit │────▶│  AI Suggestion   │
-│  & Context  │     │ /Weekly Intel│     │  + Analysis      │
-└─────────────┘     └──────────────┘     └───────┬──────────┘
-                                                 │
-                                                 ▼
-                                         ┌──────────────────┐
-                                         │  Human Feedback  │
-                                         │  😖 / 😐 / 🤩    │
-                                         └───────┬──────────┘
-                                                 │
-                          ┌──────────────────────┘
-                          ▼
-                ┌──────────────────┐     ┌──────────────────┐
-                │ Feedback Storage │────▶│ Prompt Strategy  │
-                │ (Preference DB)  │     │ Optimization     │
-                └──────────────────┘     └───────┬──────────┘
-                                                 │
-                                                 ▼
-                                         ┌──────────────────┐
-                                         │ Improved Audit   │
-                                         │ (Next Session)   │◄─── Loop
-                                         └──────────────────┘
-```
+161 tests under `tests/`, run with `pytest`. `conftest.py` points the app at a throwaway SQLite file and an unreachable Redis port *before* importing it, so the suite touches neither `data/site.db` nor any external service. A small `FakeRedis` records publishes so SSE behaviour can be asserted. Coverage includes auth, entries, logical-date boundaries, to-do/notebook migration and limits, SSE publish/degrade paths, time-zone handling, the header calendar, export formatting, and the guest-account lifecycle (seeding, isolation, deletion, purge).
 
-### ✅ Online Preference Alignment
-
-The system acts on feedback dynamically. Before each Neural Audit or Weekly Intel generation:
-
-1. Recent feedback history is retrieved via `SQLAlchemy`.
-2. High-rated and low-rated suggestion examples are injected into the system prompt (**Few-Shot Prompting**).
-3. The AI is explicitly instructed to **match the style** of previously liked suggestions and **avoid patterns** from disliked ones.
-
-*This achieves measurable improvement in advice quality without costly model retraining.*
-
----
-
-## 🗺️ Engineering Roadmap
-
-* **Phase 3 (Reward Model):** Train a lightweight reward model (sentence embeddings + classifier) on the accumulated preference data to score candidate suggestions before they reach the user (**Best-of-N sampling**).
-* **Phase 4 (Local SLM):** Transition the pipeline to support **DPO (Direct Preference Optimization)** on a Small Language Model (e.g., Llama 3 / Phi-3) via `Ollama` for fully offline, private AI inference.
-
----
-
-## 🔄 Multi-Device Real-Time Sync (SSE + Redis)
-
-Onyx now supports user-scoped real-time sync on the dashboard page across tabs, devices, and Gunicorn workers.
-
-### What syncs in real time
-* Expense created (`expense_created`)
-* Expense deleted (`expense_deleted`)
-* Notebook updates (`notebook_updated`)
-
-### Transport architecture
-* Browser opens an authenticated SSE stream at `/api/events`.
-* Backend publishes user events to Redis pub/sub channels: `onyx:user:<user_id>`.
-* Any worker can publish; any worker serving SSE can consume and forward to the correct client.
-* Heartbeat events are sent every ~25 seconds to keep long-lived streams healthy.
-
-### Environment variables
-Add the following variables to your `.env` file:
-
-```env
-POSTGRES_DB=onyx
-POSTGRES_USER=onyx
-POSTGRES_PASSWORD=change_me
-DATABASE_URL=postgresql://onyx:change_me@postgres:5432/onyx
-REDIS_URL=redis://localhost:6379/0
-REDIS_CHANNEL_PREFIX=onyx:user
-SSE_HEARTBEAT_SECONDS=25
-```
-
-For local development with no Redis password, default `localhost:6379` works out of the box.
-
-### Install dependency
+## Running locally
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # requirements.txt + pytest
+cp sample.env .env                    # set SECRET_KEY; the rest has defaults
+python app.py                         # http://127.0.0.1:5000, SQLite, no Redis needed
+pytest
 ```
 
-### Run with Docker Compose
+For the full stack:
 
 ```bash
-cp sample.env .env
+cp sample.env .env    # set SECRET_KEY, POSTGRES_PASSWORD, REDIS_PASSWORD
 docker compose up --build
 ```
 
-Docker runtime uses PostgreSQL (`postgres` service) and Redis (`redis` service).
-For container-to-container connectivity, `DATABASE_URL` should target host `postgres` and `REDIS_URL` should target host `redis`.
+## Layout
 
-### Verification checklist
-1. Open the dashboard as the same user on two devices/tabs.
-2. Add an expense on device A and verify device B updates without reload.
-3. Delete an expense on device A and verify device B row disappears.
-4. Update quick note/notebook on device A and verify device B auto-replaces content.
-5. Run with multiple workers and confirm cross-worker sync still works.
+```
+app.py                  app factory-ish setup: config, Redis, DB init, blueprint registration
+model.py                User, UserProfile, TimeEntry
+routes/
+  main.py               dashboard, entry CRUD, archive, history, export
+  notes.py              notebook and to-do list endpoints
+  sse.py                /api/events stream
+  auth.py, guest.py     login/register/logout, guest accounts
+  profile.py            onboarding/settings
+  data.py               pomodoro state endpoints (backend only; the timer widget was removed from the UI)
+  common.py             event publishing, JSON sanitizers, migrations, time-zone helpers
+services/               day statistics, history helpers, streak counter (tracked, not shown)
+templates/, static/     Jinja pages, CSS, dashboard.js
+tests/                  pytest suite
+```
 
-### Troubleshooting
-* SSE not updating: verify Redis is running and `REDIS_URL` is reachable.
-* Events not crossing workers: ensure all workers point to the same Redis instance.
-* Stream endpoint unauthorized: `/api/events` requires a logged-in session.
-* Reverse proxy buffering: keep `X-Accel-Buffering: no` behavior enabled for SSE.
+## Limitations
+
+- No migration framework (see above).
+- No mobile layout.
+- Username/password only; no OAuth.
+- Frontend is a single ~1000-line `dashboard.js`; it works but would benefit from being split up.

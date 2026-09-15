@@ -149,7 +149,7 @@ def end_day():
 def delete(id):
     del_item = TimeEntry.query.get_or_404(id)
     if (del_item.user_id != current_user.id):
-        return "Unauthorized"
+        return "Unauthorized", 403
     try:
         deleted_id = del_item.id
         db.session.delete(del_item)
