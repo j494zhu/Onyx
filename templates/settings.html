@@ -30,8 +30,8 @@
   <section class="settings-card">
     <h2 class="card-title">Legibility</h2>
     <p class="card-note">
-      界面的文字、描边和细线都是半透明白色。这个系数整体乘在它们的透明度上，
-      面板底色不动 —— 前景和底色一起变亮等于没调。1.00 是原始值。
+      The interface's text, outlines, and hairlines are semi-transparent white. 
+      This factor is multiplied across their overall opacity. 
     </p>
 
     <div class="field">
@@ -47,8 +47,8 @@
   <section class="settings-card" id="bg-card">
     <h2 class="card-title">Background</h2>
     <p class="card-note">
-      自定义图片只保存在这台设备的浏览器里，不会上传服务器 ——
-      换一台设备会回落到内置图片。
+      Custom images are saved only in this device's browser and are never uploaded to a server. 
+      Switching to another device falls back to the built-in images. 
     </p>
 
     <p class="dark-note">Background image is not visible in dark mode.</p>
@@ -96,14 +96,14 @@
   <section class="settings-card">
     <h2 class="card-title">Typography</h2>
     <p class="card-note">
-      全部是系统自带字体，不额外加载网络字体。
+        All fonts are system fonts; no web fonts are loaded.
     </p>
 
     {% set labels = {
       'clock':   ('Clock & times', '09:41  ·  14:20 → 15:05'),
       'ui':      ('Interface', 'Start Session · Archive Day · History Flow'),
       'display': ('Headings', 'Sep 18, 2026 — Neural Archives'),
-      'content': ('Your text', '写点什么 · Deep work on the parser rewrite')
+      'content': ('Your text', 'Write something · Deep work on the parser rewrite')
     } %}
 
     {% for role, spec in font_roles.items() %}
