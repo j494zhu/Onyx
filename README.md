@@ -13,7 +13,6 @@ Backend is Flask + SQLAlchemy; frontend is Jinja templates and plain JavaScript 
 - **History** – browse archived sessions by day or by week, with per-day totals and a rough "focus" percentage based on keywords in the descriptions.
 - **To-do lists and notebooks** – multiple tabbed to-do lists and multiple tabbed notebooks per user. Notebook text auto-saves after a short debounce. Neither is cleared when a day is archived.
 - **Daily export** – download today's sessions and to-dos as a plain-text file.
-- **Profile and onboarding** – a short questionnaire on first login (typical wake-up time, meal windows, goals) stored in a `UserProfile` row.
 - **Dark mode** – follows the OS preference, can be overridden, and applies before first paint to avoid a white flash.
 - **Guest mode** – one click creates an isolated guest account seeded with a week of sample history. Guests are deleted on logout, and stale guests (older than 24 h) are purged the next time someone enters as a guest.
 
@@ -80,7 +79,7 @@ routes/
   notes.py              notebook and to-do list endpoints
   sse.py                /api/events stream
   auth.py, guest.py     login/register/logout, guest accounts
-  profile.py            onboarding/settings
+  profile.py            settings
   data.py               pomodoro state endpoints (backend only; the timer widget was removed from the UI)
   common.py             event publishing, JSON sanitizers, migrations, time-zone helpers
 services/               day statistics, history helpers, streak counter (tracked, not shown)

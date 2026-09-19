@@ -3,7 +3,7 @@ import re as _re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import current_app, request, has_request_context
-from model import db, UserProfile
+from model import db
 
 # --- Event constants ---
 EVENT_ENTRY_CREATED = 'entry_created'
@@ -325,44 +325,145 @@ def now_local():
     return datetime.now(resolve_user_tz()).replace(tzinfo=None)
 
 
-# --- User Profile helpers ---
+# --- 外观设置（User.ui_prefs）---
+#
+# 存的是一个小 JSON：亮度系数、背景（图/模糊/压暗）、四档字体。渲染时被翻成
+# 一串 CSS 自定义属性写进 <html style="...">，所以服务端**必须**把每个值
+# 收进白名单/区间里 —— 否则这里就是一条 CSS 注入路径。
+#
+# 用户自己上传的背景图不经过服务器：它躺在浏览器的 IndexedDB 里，库里只记
+# bg.src == 'local' 这个标记。换一台设备读不到那张图时，自动回落到 DEFAULT_BG。
 
-def load_user_profile(user):
-    if user.profile:
-        return user.profile
-    p = UserProfile(user_id=user.id)
-    db.session.add(p)
-    db.session.commit()
-    return p
+BG_DIR = 'images/Obsidian'
+DEFAULT_BG = '4k-forest-7sfd6znw2ry6hnlt.jpg'
+BG_LOCAL = 'local'
+_BG_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
+
+# 四档字体各自的可选项。值是完整的 font-family 栈，全部走系统字体，
+# 不引入新的 Google Fonts 请求（Inter 本来就已经在加载）。
+FONT_STACKS = {
+    'inter':     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    'system':    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    'verdana':   "Verdana, Geneva, sans-serif",
+    'trebuchet': "'Trebuchet MS', 'Lucida Grande', sans-serif",
+    'times':     "'Times New Roman', Times, serif",
+    'georgia':   "Georgia, Cambria, 'Times New Roman', serif",
+    'palatino':  "'Palatino Linotype', 'Book Antiqua', Palatino, serif",
+    'consolas':  "'Consolas', 'Monaco', 'Courier New', monospace",
+    'monoui':    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+    'courier':   "'Courier New', Courier, monospace",
+}
+
+# 每档允许的选项 + 默认值（默认值一律等于改造前的现状，"以现在作为基准"）。
+FONT_ROLES = {
+    'clock':   {'default': 'consolas', 'options': ('consolas', 'monoui', 'courier', 'times', 'georgia', 'inter')},
+    'ui':      {'default': 'inter',    'options': ('inter', 'system', 'verdana', 'trebuchet', 'georgia')},
+    'display': {'default': 'times',    'options': ('times', 'georgia', 'palatino', 'inter', 'consolas')},
+    'content': {'default': 'inter',    'options': ('inter', 'system', 'georgia', 'times', 'monoui', 'trebuchet')},
+}
+
+# 连续量的区间与基准。基准值即当前视觉，滑块居中就是"不改"。
+UI_RANGES = {
+    'lum':  {'default': 1.0, 'min': 0.75, 'max': 1.35},
+    'blur': {'default': 0.0, 'min': 0.0,  'max': 24.0},
+    'dim':  {'default': 1.0, 'min': 0.5,  'max': 1.6},
+}
 
 
-def _update_profile_from_form(profile, form_data):
-    for field in [
-        'typical_wakeup', 'typical_bedtime',
-        'breakfast_window_start', 'breakfast_window_end',
-        'lunch_window_start', 'lunch_window_end',
-        'dinner_window_start', 'dinner_window_end',
-        'chronotype', 'peak_start', 'peak_end',
-        'daily_burden', 'primary_goal', 'exercise_goal',
-        'health_note',
-    ]:
-        if field in form_data and form_data[field] is not None:
-            setattr(profile, field, form_data[field])
+def builtin_backgrounds():
+    """static/images/Obsidian 下的内置背景图文件名，排序后返回。"""
+    import os
+    folder = os.path.join(current_app.static_folder, *BG_DIR.split('/'))
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return [DEFAULT_BG]
+    return sorted(n for n in names if n.lower().endswith(_BG_EXTS))
 
-    for json_field in [
-        'work_style', 'secondary_goals', 'interests',
-        'ai_role', 'tracked_habits',
-    ]:
-        if json_field in form_data:
-            val = form_data[json_field]
-            if isinstance(val, list):
-                setattr(profile, json_field, json.dumps(val))
-            elif isinstance(val, str):
-                try:
-                    json.loads(val)
-                    setattr(profile, json_field, val)
-                except json.JSONDecodeError:
-                    setattr(profile, json_field, json.dumps([val]))
+
+def _clamp_num(value, spec):
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return spec['default']
+    if num != num:  # NaN
+        return spec['default']
+    return max(spec['min'], min(spec['max'], num))
+
+
+def _pick_font(value, role):
+    spec = FONT_ROLES[role]
+    return value if value in spec['options'] else spec['default']
+
+
+def default_ui_prefs():
+    return {
+        'lum': UI_RANGES['lum']['default'],
+        'bg': {
+            'src': DEFAULT_BG,
+            'blur': UI_RANGES['blur']['default'],
+            'dim': UI_RANGES['dim']['default'],
+        },
+        'fonts': {role: spec['default'] for role, spec in FONT_ROLES.items()},
+    }
+
+
+def sanitize_ui_prefs(raw):
+    """把任意输入收成一份合法的外观设置；缺的补默认值，越界的夹回区间。"""
+    prefs = default_ui_prefs()
+    if not isinstance(raw, dict):
+        return prefs
+
+    prefs['lum'] = round(_clamp_num(raw.get('lum'), UI_RANGES['lum']), 3)
+
+    bg = raw.get('bg')
+    if isinstance(bg, dict):
+        src = str(bg.get('src') or '').strip()
+        if src == BG_LOCAL or src in builtin_backgrounds():
+            prefs['bg']['src'] = src
+        prefs['bg']['blur'] = round(_clamp_num(bg.get('blur'), UI_RANGES['blur']), 1)
+        prefs['bg']['dim'] = round(_clamp_num(bg.get('dim'), UI_RANGES['dim']), 3)
+
+    fonts = raw.get('fonts')
+    if isinstance(fonts, dict):
+        for role in FONT_ROLES:
+            prefs['fonts'][role] = _pick_font(fonts.get(role), role)
+
+    return prefs
+
+
+def load_ui_prefs(user):
+    """读出该用户的外观设置；没存过或存坏了都回落到默认（= 当前视觉）。"""
+    raw = getattr(user, 'ui_prefs', None)
+    if not raw:
+        return default_ui_prefs()
+    try:
+        return sanitize_ui_prefs(json.loads(raw))
+    except (ValueError, TypeError):
+        return default_ui_prefs()
+
+
+def ui_prefs_to_text(prefs):
+    return json.dumps(prefs, ensure_ascii=False)
+
+
+def ui_prefs_style(prefs, bg_url):
+    """
+    把设置翻成 <html style="..."> 里的那串 CSS 自定义属性。
+
+    只输出数字和白名单里的字体栈，所以这串东西是安全的；Jinja 的自动转义
+    会把字体栈里的单引号转成实体，浏览器解回来再交给 CSS，语义不变。
+    """
+    fonts = prefs['fonts']
+    parts = [
+        f"--lum:{prefs['lum']:g}",
+        f"--bg-blur:{prefs['bg']['blur']:g}px",
+        f"--bg-dim:{prefs['bg']['dim']:g}",
+        f"--bg-image:url('{bg_url}')",
+    ]
+    for role in FONT_ROLES:
+        parts.append(f"--font-{role}:{FONT_STACKS[fonts[role]]}")
+    return ';'.join(parts) + ';'
 
 
 # --- Rate-limit helper ---

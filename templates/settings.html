@@ -1,214 +1,136 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="1"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onyx — Settings</title>
   {% include '_icons.html' %}
-
-  <style>
-    body { visibility: hidden; }
-  </style>
-  <script>
-    (function () {
-      try {
-        var stored = localStorage.getItem('onyx-dark-mode');
-        var prefersDark = window.matchMedia &&
-          window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var dark = stored === '1' || (stored === null && prefersDark);
-        if (dark) document.documentElement.classList.add('dark-mode');
-      } catch (e) {}
-    })();
-  </script>
+  {% include '_ui_head.html' %}
 
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
 </head>
 <body>
 
-<div class="onboard-wrapper">
-  <div class="onboard-card onboard-card--settings">
+{# 整页设置直接写进 <html> 的 CSS 变量，所以这一页自己就是预览画布。
+   每次改动防抖 400ms 后整份 POST 给 /api/settings/save。 #}
+<div class="settings-wrapper"
+     id="settings-root"
+     data-prefs='{{ prefs | tojson }}'
+     data-local-key="{{ bg_local }}"
+     data-default-bg="{{ default_bg }}">
 
-    <div class="settings-header">
-      <h2 class="onboard-title">Neural Profile Settings</h2>
-      <p class="onboard-sub">Update your preferences — these calibrate the AI audit</p>
+  <div class="settings-head">
+    <h1 class="settings-title">Settings</h1>
+    <a href="/" class="settings-back">← Back to dashboard</a>
+  </div>
+
+  <!-- ═══ 亮度 ═══════════════════════════════════════════════ -->
+  <section class="settings-card">
+    <h2 class="card-title">Legibility</h2>
+    <p class="card-note">
+      界面的文字、描边和细线都是半透明白色。这个系数整体乘在它们的透明度上，
+      面板底色不动 —— 前景和底色一起变亮等于没调。1.00 是原始值。
+    </p>
+
+    <div class="field">
+      <label class="field__label" for="lum">Text brightness</label>
+      <input type="range" id="lum" data-key="lum"
+             min="{{ ui_ranges.lum.min }}" max="{{ ui_ranges.lum.max }}"
+             step="0.01" value="{{ prefs.lum }}">
+      <span class="field__value" id="lum-value"></span>
     </div>
+  </section>
 
-    <form id="settings-form" class="settings-form">
+  <!-- ═══ 背景 ═══════════════════════════════════════════════ -->
+  <section class="settings-card" id="bg-card">
+    <h2 class="card-title">Background</h2>
+    <p class="card-note">
+      自定义图片只保存在这台设备的浏览器里，不会上传服务器 ——
+      换一台设备会回落到内置图片。
+    </p>
 
-      <!-- Category 1: Daily Rhythm -->
-      <fieldset class="settings-section">
-        <legend class="settings-section__title">Daily Rhythm</legend>
+    <p class="dark-note">Background image is not visible in dark mode.</p>
 
-        <div class="form-row form-row--dual">
-          <label class="form-field">
-            <span class="form-label">Wake Up</span>
-            <input type="time" class="form-input form-input--time" name="typical_wakeup" value="{{ profile.typical_wakeup }}">
-          </label>
-          <label class="form-field">
-            <span class="form-label">Bedtime</span>
-            <input type="time" class="form-input form-input--time" name="typical_bedtime" value="{{ profile.typical_bedtime }}">
-          </label>
-        </div>
+    <div class="is-dark-disabled">
+      <div class="bg-grid" id="bg-grid">
+        {% for name in backgrounds %}
+        <button type="button"
+                class="bg-tile{% if prefs.bg.src == name %} is-active{% endif %}"
+                data-src="{{ name }}"
+                data-url="{{ url_for('static', filename=bg_dir + '/' + name) }}"
+                style="background-image: url('{{ url_for('static', filename=bg_dir + '/' + name) }}')"
+                title="{{ name }}"
+                aria-label="{{ name }}"></button>
+        {% endfor %}
 
-        <label class="form-field">
-          <span class="form-label">Breakfast Window</span>
-          <div class="form-row form-row--range">
-            <input type="time" class="form-input form-input--time form-input--sm" name="breakfast_window_start" value="{{ profile.breakfast_window_start }}">
-            <span class="form-range-dash">&mdash;</span>
-            <input type="time" class="form-input form-input--time form-input--sm" name="breakfast_window_end" value="{{ profile.breakfast_window_end }}">
-          </div>
-        </label>
-
-        <label class="form-field">
-          <span class="form-label">Lunch Window</span>
-          <div class="form-row form-row--range">
-            <input type="time" class="form-input form-input--time form-input--sm" name="lunch_window_start" value="{{ profile.lunch_window_start }}">
-            <span class="form-range-dash">&mdash;</span>
-            <input type="time" class="form-input form-input--time form-input--sm" name="lunch_window_end" value="{{ profile.lunch_window_end }}">
-          </div>
-        </label>
-
-        <label class="form-field">
-          <span class="form-label">Dinner Window</span>
-          <div class="form-row form-row--range">
-            <input type="time" class="form-input form-input--time form-input--sm" name="dinner_window_start" value="{{ profile.dinner_window_start }}">
-            <span class="form-range-dash">&mdash;</span>
-            <input type="time" class="form-input form-input--time form-input--sm" name="dinner_window_end" value="{{ profile.dinner_window_end }}">
-          </div>
-        </label>
-      </fieldset>
-
-      <!-- Category 2: Work Style -->
-      <fieldset class="settings-section">
-        <legend class="settings-section__title">Work Style</legend>
-
-        <div class="form-section-label">Chronotype</div>
-        <div class="card-row" data-settings-field="chronotype">
-          <button type="button" class="choice-card {% if profile.chronotype == 'morning' %}is-selected{% endif %}" data-value="morning">
-            <span class="choice-card__icon">☀️</span>
-            <span class="choice-card__label">Morning Person</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.chronotype == 'night_owl' %}is-selected{% endif %}" data-value="night_owl">
-            <span class="choice-card__icon">🌙</span>
-            <span class="choice-card__label">Night Owl</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.chronotype == 'flexible' %}is-selected{% endif %}" data-value="flexible">
-            <span class="choice-card__icon">🔄</span>
-            <span class="choice-card__label">Flexible</span>
-          </button>
-        </div>
-
-        <label class="form-field">
-          <span class="form-label">Peak Productivity Window</span>
-          <div class="form-row form-row--range">
-            <input type="time" class="form-input form-input--time form-input--sm" name="peak_start" value="{{ profile.peak_start }}">
-            <span class="form-range-dash">&mdash;</span>
-            <input type="time" class="form-input form-input--time form-input--sm" name="peak_end" value="{{ profile.peak_end }}">
-          </div>
-        </label>
-
-        <div class="form-section-label">Daily Burden</div>
-        <div class="card-row" data-settings-field="daily_burden">
-          <button type="button" class="choice-card {% if profile.daily_burden == 'light' %}is-selected{% endif %}" data-value="light">
-            <span class="choice-card__label">Light</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.daily_burden == 'medium' %}is-selected{% endif %}" data-value="medium">
-            <span class="choice-card__label">Medium</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.daily_burden == 'heavy' %}is-selected{% endif %}" data-value="heavy">
-            <span class="choice-card__label">Heavy</span>
-          </button>
-        </div>
-
-        <div class="form-section-label">Work Style</div>
-        <div class="tag-row" data-settings-field="work_style">
-          {% set ws = profile.work_style_obj or ['solo'] %}
-          <button type="button" class="tag-chip {% if 'solo' in ws %}is-selected{% endif %}" data-value="solo">Deep Solo Work</button>
-          <button type="button" class="tag-chip {% if 'collaborative' in ws %}is-selected{% endif %}" data-value="collaborative">Collaborative</button>
-          <button type="button" class="tag-chip {% if 'mixed' in ws %}is-selected{% endif %}" data-value="mixed">Mixed</button>
-        </div>
-      </fieldset>
-
-      <!-- Category 3: Goals & Focus -->
-      <fieldset class="settings-section">
-        <legend class="settings-section__title">Goals &amp; Focus</legend>
-
-        <label class="form-field">
-          <span class="form-label">Primary Goal</span>
-          <input type="text" class="form-input" name="primary_goal" value="{{ profile.primary_goal }}"
-                 placeholder="e.g. Master machine learning engineering..." maxlength="200">
-        </label>
-
-        <div class="form-section-label">Interests</div>
-        <div class="tag-row" data-settings-field="interests" data-multi>
-          {% set interests = profile.interests_obj or [] %}
-          {% for tag in ['Python', 'Algorithms', 'System Design', 'Machine Learning', 'Math', 'Web Dev', 'DevOps', 'Data Science', 'Writing', 'Design'] %}
-          <button type="button" class="tag-chip {% if tag in interests %}is-selected{% endif %}" data-value="{{ tag }}">{{ tag }}</button>
-          {% endfor %}
-        </div>
-
-        <div class="form-section-label">AI Role</div>
-        <div class="tag-row" data-settings-field="ai_role" data-multi>
-          {% set ar = profile.ai_role_obj or ['general'] %}
-          <button type="button" class="tag-chip {% if 'general' in ar %}is-selected{% endif %}" data-value="general">General Assistant</button>
-          <button type="button" class="tag-chip {% if 'accountability' in ar %}is-selected{% endif %}" data-value="accountability">Accountability Partner</button>
-          <button type="button" class="tag-chip {% if 'wellness' in ar %}is-selected{% endif %}" data-value="wellness">Wellness Coach</button>
-          <button type="button" class="tag-chip {% if 'time_tracker' in ar %}is-selected{% endif %}" data-value="time_tracker">Time Tracker</button>
-        </div>
-
-        <div class="form-section-label">Secondary Goals</div>
-        <textarea class="form-input form-input--area" id="settings-secondary"
-                  placeholder="Build portfolio project, Read 2 papers/week..."
-                  rows="3" maxlength="500">{{ profile.secondary_goals_text or '' }}</textarea>
-      </fieldset>
-
-      <!-- Category 4: Habits & Wellness -->
-      <fieldset class="settings-section">
-        <legend class="settings-section__title">Habits &amp; Wellness</legend>
-
-        <div class="form-section-label">Exercise Goal</div>
-        <div class="card-row" data-settings-field="exercise_goal">
-          <button type="button" class="choice-card {% if profile.exercise_goal == 'none' %}is-selected{% endif %}" data-value="none">
-            <span class="choice-card__label">None</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.exercise_goal == 'light' %}is-selected{% endif %}" data-value="light">
-            <span class="choice-card__label">Light</span>
-          </button>
-          <button type="button" class="choice-card {% if profile.exercise_goal == 'regular' %}is-selected{% endif %}" data-value="regular">
-            <span class="choice-card__label">Regular</span>
-          </button>
-        </div>
-
-        <div class="form-section-label">Habits to Track</div>
-        <div class="tag-row" data-settings-field="tracked_habits" data-multi>
-          {% set th = profile.tracked_habits_obj or [] %}
-          <button type="button" class="tag-chip {% if 'meditation' in th %}is-selected{% endif %}" data-value="meditation">Meditation</button>
-          <button type="button" class="tag-chip {% if 'reading' in th %}is-selected{% endif %}" data-value="reading">Reading</button>
-          <button type="button" class="tag-chip {% if 'journaling' in th %}is-selected{% endif %}" data-value="journaling">Journaling</button>
-          <button type="button" class="tag-chip {% if 'exercise' in th %}is-selected{% endif %}" data-value="exercise">Exercise</button>
-          <button type="button" class="tag-chip {% if 'learning' in th %}is-selected{% endif %}" data-value="learning">Learning</button>
-        </div>
-
-        <label class="form-field">
-          <span class="form-label">Health Note (optional)</span>
-          <textarea class="form-input form-input--area" name="health_note"
-                    placeholder="Anything else I should know..."
-                    rows="2" maxlength="300">{{ profile.health_note or '' }}</textarea>
-        </label>
-      </fieldset>
-
-      <!-- Actions -->
-      <div class="settings-actions">
-        <a href="/" class="onboard-skip">Cancel</a>
-        <button type="submit" class="onboard-btn onboard-btn--next">Save Changes</button>
+        <button type="button"
+                class="bg-tile bg-tile--upload{% if prefs.bg.src == bg_local %} is-active{% endif %}"
+                id="bg-upload-tile"
+                title="Upload your own image (stays on this device)">Upload</button>
       </div>
 
-    </form>
+      <button type="button" class="bg-clear" id="bg-clear" hidden>Remove uploaded image</button>
+      <input type="file" id="bg-file" accept="image/*" hidden>
 
+      <div class="field">
+        <label class="field__label" for="bg-blur">Blur</label>
+        <input type="range" id="bg-blur" data-key="bg.blur"
+               min="{{ ui_ranges.blur.min }}" max="{{ ui_ranges.blur.max }}"
+               step="0.5" value="{{ prefs.bg.blur }}">
+        <span class="field__value" id="bg-blur-value"></span>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="bg-dim">Dimming</label>
+        <input type="range" id="bg-dim" data-key="bg.dim"
+               min="{{ ui_ranges.dim.min }}" max="{{ ui_ranges.dim.max }}"
+               step="0.01" value="{{ prefs.bg.dim }}">
+        <span class="field__value" id="bg-dim-value"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 字体 ═══════════════════════════════════════════════ -->
+  <section class="settings-card">
+    <h2 class="card-title">Typography</h2>
+    <p class="card-note">
+      全部是系统自带字体，不额外加载网络字体。
+    </p>
+
+    {% set labels = {
+      'clock':   ('Clock & times', '09:41  ·  14:20 → 15:05'),
+      'ui':      ('Interface', 'Start Session · Archive Day · History Flow'),
+      'display': ('Headings', 'Sep 18, 2026 — Neural Archives'),
+      'content': ('Your text', '写点什么 · Deep work on the parser rewrite')
+    } %}
+
+    {% for role, spec in font_roles.items() %}
+    <div class="field">
+      <label class="field__label" for="font-{{ role }}">{{ labels[role][0] }}</label>
+      <select id="font-{{ role }}" data-key="fonts.{{ role }}" data-role="{{ role }}">
+        {% for opt in spec.options %}
+        <option value="{{ opt }}"
+                style="font-family: {{ font_stacks[opt] }}"
+                {% if prefs.fonts[role] == opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+      <span></span>
+      <span class="field__sample" data-sample="{{ role }}"
+            style="font-family: var(--font-{{ role }})">{{ labels[role][1] }}</span>
+    </div>
+    {% endfor %}
+  </section>
+
+  <div class="settings-foot">
+    <button type="button" class="settings-reset" id="reset-btn">Reset to defaults</button>
+    <span class="save-status" id="save-status"></span>
   </div>
+
 </div>
 
-<script src="{{ url_for('static', filename='scripts/onboarding.js') }}"></script>
+<script src="{{ url_for('static', filename='scripts/bg_local.js') }}"></script>
+<script src="{{ url_for('static', filename='scripts/settings.js') }}"></script>
 </body>
 </html>

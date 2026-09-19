@@ -1,24 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="1"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onyx</title>
   {% include '_icons.html' %}
 
-  <!-- Theme pre-paint: decide light/dark BEFORE first paint to avoid a flash.
-       Explicit user choice (localStorage) wins; otherwise follow the OS theme. -->
-  <script>
-    (function () {
-      try {
-        var stored = localStorage.getItem('onyx-dark-mode');
-        var prefersDark = window.matchMedia &&
-          window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var dark = stored === '1' || (stored === null && prefersDark);
-        if (dark) document.documentElement.classList.add('dark-mode');
-      } catch (e) {}
-    })();
-  </script>
+  {% include '_ui_head.html' %}
   <!-- Timezone handshake: tell the server the browser's IANA zone so the
        date / weekday / 06:00 logical-day boundary follow the user, not the
        container's UTC clock. Server falls back to America/Toronto without it.
@@ -38,7 +26,8 @@
   <!-- Fonts -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 
-  <!-- Unified Stylesheet -->
+  <!-- Unified Stylesheet — tokens.css 必须排在前面，dashboard.css 依赖它的令牌 -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
@@ -322,6 +311,7 @@
   <!-- ═══ SCRIPTS ═══════════════════════════════════════════ -->
   <script src="{{ url_for('static', filename='scripts/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
+  <script src="{{ url_for('static', filename='scripts/bg_local.js') }}"></script>
 
 </body>
 </html>

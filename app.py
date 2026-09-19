@@ -125,6 +125,14 @@ def ensure_user_columns():
         except Exception as exc:
             app.logger.info('Skipping adding user.todo_lists (likely a concurrent worker won the race): %s', exc)
 
+    if 'ui_prefs' not in existing_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(sa_text("ALTER TABLE \"user\" ADD COLUMN ui_prefs TEXT DEFAULT NULL"))
+            app.logger.info('Added missing column user.ui_prefs')
+        except Exception as exc:
+            app.logger.info('Skipping adding user.ui_prefs (likely a concurrent worker won the race): %s', exc)
+
     if 'is_guest' not in existing_cols:
         try:
             with engine.begin() as conn:
@@ -132,6 +140,39 @@ def ensure_user_columns():
             app.logger.info('Added missing column user.is_guest')
         except Exception as exc:
             app.logger.info('Skipping adding user.is_guest (likely a concurrent worker won the race): %s', exc)
+
+
+# Settings 问卷删除后留在 user_profile 里的旧列。只删这份名单里、且库里确实还在的列，
+# 删完后每次启动都是 no-op。
+REMOVED_PROFILE_COLUMNS = (
+    'typical_wakeup', 'typical_bedtime',
+    'breakfast_window_start', 'breakfast_window_end',
+    'lunch_window_start', 'lunch_window_end',
+    'dinner_window_start', 'dinner_window_end',
+    'chronotype', 'peak_start', 'peak_end', 'daily_burden', 'work_style',
+    'primary_goal', 'secondary_goals', 'interests', 'ai_role',
+    'exercise_goal', 'tracked_habits', 'health_note',
+    'updated_at',
+)
+
+
+def drop_profile_columns():
+    engine = db.engine
+    try:
+        existing_cols = {col['name'] for col in db.inspect(engine).get_columns('user_profile')}
+    except Exception as exc:
+        app.logger.warning('Schema inspection failed: %s', exc)
+        return
+
+    for col in REMOVED_PROFILE_COLUMNS:
+        if col not in existing_cols:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(sa_text(f'ALTER TABLE user_profile DROP COLUMN {col}'))
+            app.logger.info('Dropped column user_profile.%s', col)
+        except Exception as exc:
+            app.logger.info('Skipping dropping user_profile.%s (likely a concurrent worker won the race): %s', col, exc)
 
 
 def initialize_database():
@@ -148,9 +189,41 @@ def initialize_database():
         else:
             db.create_all()
         ensure_user_columns()
+        drop_profile_columns()
 
 
 initialize_database()
+
+# --- 外观设置注入 ---
+#
+# 把用户的 ui_prefs 翻成 CSS 自定义属性，服务端直接渲染进 <html style="...">。
+# 走服务端而不是 localStorage，是为了跨设备跟随账号，顺带彻底没有首屏闪烁。
+# 未登录的页面（登录/注册）拿到的是默认值，也就是改造前的原始外观。
+
+from routes.common import load_ui_prefs, ui_prefs_style, default_ui_prefs, BG_DIR, BG_LOCAL, DEFAULT_BG
+
+
+@app.context_processor
+def inject_ui_prefs():
+    if current_user.is_authenticated:
+        prefs = load_ui_prefs(current_user)
+    else:
+        prefs = default_ui_prefs()
+
+    # 自定义背景图只存在浏览器本地，服务端给不出 URL；这里始终填内置的回退图，
+    # 换设备读不到 IndexedDB 时它就是兜底，读得到则由前端脚本覆盖掉。
+    src = prefs['bg']['src']
+    is_local = (src == BG_LOCAL)
+    filename = DEFAULT_BG if is_local else src
+    from flask import url_for
+    bg_url = url_for('static', filename=f'{BG_DIR}/{filename}')
+
+    return {
+        'ui_prefs': prefs,
+        'ui_style': ui_prefs_style(prefs, bg_url),
+        'ui_bg_local': is_local,
+    }
+
 
 # --- Register Blueprints ---
 from routes import auth_bp, guest_bp, main_bp, profile_bp, notes_bp, sse_bp, data_bp

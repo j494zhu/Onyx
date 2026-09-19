@@ -1,0 +1,27 @@
+{# ══════════════════════════════════════════════════════════════
+   外观设置的首屏处理。放在 <head> 里、所有样式表之前。
+
+   1. 深色模式预涂：类加在 <html> 上，避免第一帧闪白。
+   2. 自定义背景图的占位：真图在 IndexedDB 里（异步），而 localStorage 里
+      那张 96px 缩略图是同步可读的 —— 先铺上顶住首屏，等 bg_local.js 读完
+      再换成全图。没有缩略图就保留 <html style> 里的内置回退图。
+
+   亮度系数和字体不需要脚本：它们由服务端直接渲染进 <html style="..."> 。
+   ══════════════════════════════════════════════════════════════ #}
+<script>
+  (function () {
+    var root = document.documentElement;
+    try {
+      var stored = localStorage.getItem('onyx-dark-mode');
+      var prefersDark = window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === '1' || (stored === null && prefersDark)) root.classList.add('dark-mode');
+    } catch (e) {}
+    try {
+      if (root.dataset.bgLocal === '1') {
+        var thumb = localStorage.getItem('onyx-bg-thumb');
+        if (thumb) root.style.setProperty('--bg-image', "url('" + thumb + "')");
+      }
+    } catch (e) {}
+  })();
+</script>

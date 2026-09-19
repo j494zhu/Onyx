@@ -6,7 +6,7 @@ from conftest import register, login, get_user
 def test_register_creates_user_and_profile(client):
     resp = register(client, 'alice', 'password123')
     assert resp.status_code == 302
-    assert '/onboarding' in resp.headers['Location']
+    assert resp.headers['Location'] == '/'
 
     user = get_user('alice')
     assert user is not None

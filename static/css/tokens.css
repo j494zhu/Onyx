@@ -1,0 +1,149 @@
+/* ══════════════════════════════════════════════════════════════
+   ONYX — 共享设计令牌 + 背景图层
+   ══════════════════════════════════════════════════════════════
+   这里的值是"没登录 / 没存过设置"时的回退，等于外观设置上线前的原始视觉。
+   登录用户的实际值由服务端渲染进 <html style="...">（app.py 的
+   inject_ui_prefs），在这里之后生效，所以不需要任何首屏脚本去改。
+
+   --lum 是文字亮度系数：只乘在**前景**（文字、描边、细线、发光）上，
+   不乘在玻璃面板的底色上 —— 前景和底色一起提亮的话对比度原地不动，
+   等于什么也没调。
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── 外观设置的旋钮（会被 <html style> 覆盖）─── */
+  --lum:      1;
+  --bg-blur:  0px;
+  --bg-dim:   1;
+  --bg-image: url('../images/Obsidian/4k-forest-7sfd6znw2ry6hnlt.jpg');
+
+  --font-clock:   'Consolas', 'Monaco', 'Courier New', monospace;
+  --font-ui:      'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Times New Roman', Times, serif;
+  --font-content: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Surfaces —— 不随 --lum 变，理由见文件头 */
+  --surface-deep:      #0a0e14;
+  --surface-card:      rgba(255, 255, 255, 0.04);
+  --surface-elevated:  rgba(255, 255, 255, 0.07);
+  --surface-hover:     rgba(255, 255, 255, 0.10);
+  --surface-active:    rgba(255, 255, 255, 0.14);
+
+  /* Borders */
+  --border-subtle:     rgba(255, 255, 255, calc(0.06 * var(--lum)));
+  --border-default:    rgba(255, 255, 255, calc(0.12 * var(--lum)));
+  --border-strong:     rgba(255, 255, 255, calc(0.25 * var(--lum)));
+
+  /* Typography */
+  --text-primary:      rgba(255, 255, 255, calc(0.95 * var(--lum)));
+  --text-secondary:    rgba(255, 255, 255, calc(0.65 * var(--lum)));
+  --text-muted:        rgba(255, 255, 255, calc(0.35 * var(--lum)));
+  --text-ghost:        rgba(255, 255, 255, calc(0.18 * var(--lum)));
+  /* 正文档位：比标题(--text-muted)亮，长时间阅读/编辑不吃力。
+     笔记本正文和待办条目用它，标题和顶栏仍留在 --text-muted。 */
+  --text-content:      rgba(255, 255, 255, calc(0.58 * var(--lum)));
+
+  /* Accent Palette */
+  --accent-gold:       #c9a94e;
+  --accent-teal:       #56b6a2;
+  --accent-purple:     #a78bda;
+  --accent-rose:       #d4727a;
+  --accent-blue:       #6fa8dc;
+
+  /* To-Do Progress Bar — 凹陷细轨 + 青绿渐变填充,与 accent-teal / 复选框同色系。
+     亮度取在"原始亮版"和"全暗版"之间约 7 成处:压住喧宾夺主,又不至于发灰。 */
+  --progress-track:    rgba(120, 150, 152, 0.13);
+  --progress-fill-a:   rgba(86, 182, 162, 0.36);
+  --progress-fill-b:   rgba(123, 200, 179, 0.59);
+  --progress-fill-c:   rgba(189, 228, 216, 0.72);
+  --progress-glow:     rgba(86, 182, 162, 0.24);
+  --progress-text:     rgba(231, 239, 238, calc(0.44 * var(--lum)));
+
+  /* Neon Signals */
+  --neon-green:        #00ff41;
+  --neon-yellow:       #ffcc00;
+  --neon-red:          #ff3333;
+  --neon-purple:       #a78bda;
+
+  /* Glass Effect */
+  --glass-bg:          rgba(255, 255, 255, 0.04);
+  --glass-blur:        24px;
+  --glass-border:      rgba(255, 255, 255, calc(0.08 * var(--lum)));
+
+  /* Shadows */
+  --shadow-sm:         0 1px 4px rgba(0, 0, 0, 0.2);
+  --shadow-md:         0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg:         0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-glow:       0 0 20px rgba(167, 139, 218, 0.08);
+
+  /* Spacing */
+  --gap:               14px;
+  --pad-widget:        18px;
+
+  /* Radii */
+  --radius-sm:         8px;
+  --radius-md:         12px;
+  --radius-lg:         16px;
+  --radius-xl:         20px;
+
+  /* 描边线条三档亮度：书签、顶栏星期条共用这一套 */
+  --line-dim:          rgba(255, 255, 255, calc(0.3 * var(--lum)));
+  --line-hover:        rgba(255, 255, 255, calc(0.5 * var(--lum)));
+  --line-bright:       rgba(255, 255, 255, calc(0.7 * var(--lum)));
+
+  /* Transitions */
+  --ease:              cubic-bezier(0.16, 1, 0.3, 1);
+  --duration:          300ms;
+  --duration-fast:     180ms;
+}
+
+
+/* ─── 背景图层 ──────────────────────────────────────────────────
+   背景从 body 的 background-image 挪成两层固定伪元素。必须这么拆：
+   filter: blur() 直接打在 body 上会把所有子元素一起糊掉。
+
+   ::before 是图，::after 是压暗层。--bg-dim 乘在压暗层的 alpha 上，
+   1 就是原来的配方。
+   ───────────────────────────────────────────────────────────── */
+
+body {
+  background-image: none;
+  background-color: transparent;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  /* 外扩 ~2 倍模糊半径：blur 会在四边羽化出一圈透明带，不顶出去就会露底 */
+  inset: calc(-2px - var(--bg-blur) * 2);
+  z-index: -2;
+  background: var(--bg-image) center / cover no-repeat;
+  filter: blur(var(--bg-blur));
+  pointer-events: none;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 30% 20%,
+    rgba(20, 35, 40, calc(0.5  * var(--bg-dim))) 0%,
+    rgba(8,  12, 18, calc(0.85 * var(--bg-dim))) 100%);
+}
+
+/* 深色模式整页纯黑，两层背景一起撤掉 —— 背景图在深色模式下本来就不可见，
+   设置页那三项会置灰并给出说明。
+
+   黑底写在这里而不是 dashboard.css：凡是加载 tokens.css 的页面都会因为上面
+   那条规则失去背景层，底色就必须在同一个地方补上，否则整页会露出浏览器的白。 */
+html.dark-mode,
+html.dark-mode body {
+  background-color: #000;
+}
+
+html.dark-mode body::before,
+html.dark-mode body::after {
+  display: none;
+}

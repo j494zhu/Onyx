@@ -1,12 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="1"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <title>Neural Archives</title>
     {% include '_icons.html' %}
+    {% include '_ui_head.html' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login_body.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
+    {# tokens.css 排在最后：它要把 style.css / login_body.css 写在 body 上的
+       背景和底色覆盖掉，改由 body::before / body::after 两层来画。 #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
 </head>
 <body>
 
@@ -108,5 +112,6 @@
 
     </div>
 
+    <script src="{{ url_for('static', filename='scripts/bg_local.js') }}"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /* 全局设置 */  
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-ui, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
     /* 👇 改动在这里：不再加载图片，而是用一个清爽的灰白色背景 */
     background-color: #eef2f5; 
     /* 或者如果你喜欢渐变色，可以用下面这一行代替上面那行 (二选一) */

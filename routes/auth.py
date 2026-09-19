@@ -25,7 +25,7 @@ def register():
         db.session.add(profile)
         db.session.commit()
         login_user(new_user)
-        return redirect('/onboarding')
+        return redirect('/')
     else:
         return render_template('register.html')
 

@@ -35,6 +35,12 @@ class User(UserMixin, db.Model):
 
     pomodoro_state = db.Column(db.Text, default=None)
 
+    # 外观设置（亮度系数、背景图/模糊/压暗、四档字体），存 JSON 文本；
+    # 校验与默认值见 routes/common.py 的 load_ui_prefs() / sanitize_ui_prefs()。
+    # 用户自己上传的背景图不在这里 —— 它只存在浏览器的 IndexedDB 里，
+    # 这里记的只有 "local" 这个标记和跨设备时的回退图。
+    ui_prefs = db.Column(db.Text, default=None)
+
     # 访客账号（登录页 "Continue without account" 创建），登出即删除；
     # 逻辑见 routes/guest.py。
     is_guest = db.Column(db.Boolean, default=False)
@@ -48,38 +54,10 @@ class UserProfile(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True,
                         nullable=False)
 
-    # ── Category 1: Daily Rhythm ──
-    typical_wakeup = db.Column(db.String(5), default='08:00')
-    typical_bedtime = db.Column(db.String(5), default='23:30')
-    breakfast_window_start = db.Column(db.String(5), default='07:00')
-    breakfast_window_end = db.Column(db.String(5), default='09:00')
-    lunch_window_start = db.Column(db.String(5), default='12:00')
-    lunch_window_end = db.Column(db.String(5), default='13:30')
-    dinner_window_start = db.Column(db.String(5), default='18:00')
-    dinner_window_end = db.Column(db.String(5), default='20:00')
-
-    # ── Category 2: Work Style ──
-    chronotype = db.Column(db.String(20), default='morning')
-    peak_start = db.Column(db.String(5), default='09:00')
-    peak_end = db.Column(db.String(5), default='12:00')
-    daily_burden = db.Column(db.String(10), default='medium')
-    work_style = db.Column(db.Text, default='["solo"]')  # JSON array
-
-    # ── Category 3: Goals & Focus ──
-    primary_goal = db.Column(db.Text, default='')
-    secondary_goals = db.Column(db.Text, default='[]')   # JSON array
-    interests = db.Column(db.Text, default='[]')          # JSON array
-    ai_role = db.Column(db.Text, default='["general"]')   # JSON array
-
-    # ── Category 4: Habits & Wellness ──
-    exercise_goal = db.Column(db.String(10), default='light')
-    tracked_habits = db.Column(db.Text, default='[]')     # JSON array
-    health_note = db.Column(db.Text, default='')
-
-    # ── Metadata ──
+    # 原先的问卷字段（作息、目标、习惯等）已随 Settings 内容一起删除，
+    # 旧库里的列由 app.py 的 drop_profile_columns() 在启动时清掉。
+    # 这张表只剩 created_at：访客账号靠它判断是否过期（routes/guest.py）。
     created_at = db.Column(db.DateTime, default=datetime.now)
-    updated_at = db.Column(db.DateTime, default=datetime.now,
-                           onupdate=datetime.now)
 
     user = db.relationship('User', back_populates='profile')
 

@@ -11,7 +11,7 @@ from routes.common import (
     serialize_entry, is_ajax_request, publish_user_event,
     EVENT_ENTRY_CREATED, EVENT_ENTRY_DELETED,
     load_todos, migrate_quick_note_to_todos, get_logical_date,
-    load_user_profile, load_notebooks, load_todo_lists, now_local,
+    load_notebooks, load_todo_lists, now_local,
 )
 from services.streak import update_user_streak
 from services.history_helper import build_day_stats
@@ -107,12 +107,6 @@ def index():
             current_user.notebooks = json.dumps(notebooks)
             db.session.commit()
 
-        profile = load_user_profile(current_user)
-        onboarding_needed = (
-            profile.primary_goal == ''
-            and json.loads(profile.interests or '[]') == []
-        )
-
         return render_template(
             'index.html',
             entries=entries,
@@ -124,7 +118,6 @@ def index():
             notebooks_json=json.dumps(notebooks),
             streak_incremented=streak_incremented,
             streak=current_user.streak,
-            onboarding_needed=onboarding_needed,
         )
 
 

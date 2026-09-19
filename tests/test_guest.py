@@ -25,7 +25,7 @@ def test_login_page_offers_guest_entry(client):
     assert 'Continue without account' in html
 
 
-def test_guest_login_skips_onboarding_and_opens_dashboard(client):
+def test_guest_login_opens_dashboard(client):
     resp = client.post('/guest')
     assert resp.status_code == 302
     assert resp.headers['Location'] == '/'

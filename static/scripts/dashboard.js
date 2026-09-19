@@ -300,6 +300,29 @@ setInterval(updateHeaderDate, 30000);
 
 let isRecordingSession = false;
 
+// 录制中按钮上显示已用时长（HH:MM:SS），代替原先的脉冲动画。
+// 每次都用 Date.now() 减起点重新算，后台标签页被节流时也不会走偏。
+let recordingStartedAt = 0;
+let recordingTimer = null;
+
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = String(Math.floor(total / 3600)).padStart(2, '0');
+  const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+  const sec = String(total % 60).padStart(2, '0');
+  return `${h}:${m}:${sec}`;
+}
+
+function renderElapsed() {
+  const el = document.getElementById('rec-elapsed');
+  if (el) el.textContent = formatElapsed(Date.now() - recordingStartedAt);
+}
+
+function stopElapsedTimer() {
+  clearInterval(recordingTimer);
+  recordingTimer = null;
+}
+
 function toggleRecording() {
   const btn = document.getElementById('record-btn');
   const submitBtn = document.getElementById('submit-btn');
@@ -312,16 +335,27 @@ function toggleRecording() {
     // === START ===
     isRecordingSession = true;
     inputStart.value = formatTime(new Date());
-    btn.innerHTML = '<span>■</span> Stop & Log';
+    // 平时显示计时；悬停/聚焦时换成 "Stop & Log"，按钮的作用仍然看得出来（见 dashboard.css）
+    btn.innerHTML =
+      '<span class="rec-mark">■</span>' +
+      '<span class="rec-elapsed" id="rec-elapsed">00:00:00</span>' +
+      '<span class="rec-action">Stop &amp; Log</span>';
+    btn.setAttribute('aria-label', 'Stop and log session');
     btn.classList.add('is-recording');
-    if (clockEl) clockEl.style.color = 'rgba(255,255,255,1)';
+    recordingStartedAt = Date.now();
+    stopElapsedTimer();
+    recordingTimer = setInterval(renderElapsed, 1000);
+    // 走 --lum 而不是写死透明度，否则设置页的亮度系数对时钟失效
+    if (clockEl) clockEl.style.color = 'rgba(255,255,255,calc(1 * var(--lum)))';
   } else {
     // === STOP ===
     isRecordingSession = false;
+    stopElapsedTimer();
     const now = new Date();
     inputEnd.value = formatTime(now);
     btn.style.display = 'none';
     btn.classList.remove('is-recording');
+    btn.removeAttribute('aria-label');
     submitBtn.style.display = 'block';
     submitBtn.innerHTML = `Confirm Log`;
 
@@ -329,7 +363,7 @@ function toggleRecording() {
     const timeRow = document.getElementById('time-edit-row');
     if (timeRow) timeRow.style.display = 'flex';
 
-    if (clockEl) clockEl.style.color = 'rgba(255,255,255,0.85)';
+    if (clockEl) clockEl.style.color = 'rgba(255,255,255,calc(0.85 * var(--lum)))';
     if (descInput) descInput.focus();
   }
 }

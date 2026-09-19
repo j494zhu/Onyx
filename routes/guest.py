@@ -100,7 +100,6 @@ def guest_login():
     purge_expired_guests()
     user = create_guest_user(now_local())
     login_user(user)
-    # 不走 onboarding：面试官是来看功能的，不是来填问卷的
     return redirect('/')
 
 
