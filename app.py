@@ -36,6 +36,11 @@ app.config['SSE_HEARTBEAT_SECONDS'] = SSE_HEARTBEAT_SECONDS
 app.config['RATE_LIMIT_PER_MINUTE'] = RATE_LIMIT_PER_MINUTE
 app.config['RATE_LIMIT_PER_HOUR'] = RATE_LIMIT_PER_HOUR
 
+# Send Feedback 追加写的 JSONL。生产里 ./feedback 由 docker-compose 挂进容器，
+# 否则每次部署重建容器都会把它清空（见 services/feedback.py）。
+app.config['FEEDBACK_FILE'] = os.environ.get(
+    'FEEDBACK_FILE', os.path.join(app.root_path, 'feedback', 'feedback.jsonl'))
+
 # --- Redis setup ---
 redis_client = None
 try:

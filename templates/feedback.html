@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="1"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onyx — Feedback</title>
+  {% include '_icons.html' %}
+  {% include '_ui_head.html' %}
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+</head>
+<body>
+
+{# 消息 POST 给 /api/feedback，服务端追加写进 JSONL（services/feedback.py）。
+   名字、邮箱可选；刻意不承诺回复。 #}
+<div class="settings-wrapper">
+
+  <div class="settings-head">
+    <h1 class="settings-title">Feedback</h1>
+    <a href="{{ url_for('profile.settings_page') }}" class="settings-back">← Back to settings</a>
+  </div>
+
+  <section class="settings-card">
+    <h2 class="card-title">Send feedback</h2>
+    <p class="card-note">
+      Feel free to send the author anything you'd like to share — replies aren't guaranteed.
+    </p>
+
+    <form class="fb-form" id="fb-form" novalidate data-max="{{ message_max }}">
+      <div class="fb-field" id="field-message">
+        <label class="fb-label" for="fb-message">
+          <span>Message</span>
+          <span class="fb-label__hint fb-counter" id="fb-counter">0 / {{ message_max }}</span>
+        </label>
+        <textarea class="fb-textarea" id="fb-message" name="message"
+                  maxlength="{{ message_max }}" required></textarea>
+        <span class="fb-error" id="err-message"></span>
+      </div>
+
+      <div class="fb-row">
+        <div class="fb-field" id="field-name">
+          <label class="fb-label" for="fb-name">
+            <span>Name</span><span class="fb-label__hint">optional</span>
+          </label>
+          <input class="fb-input" id="fb-name" name="name" type="text"
+                 maxlength="{{ name_max }}" autocomplete="name" placeholder="What should I call you?">
+          <span class="fb-error" id="err-name"></span>
+        </div>
+
+        <div class="fb-field" id="field-email">
+          <label class="fb-label" for="fb-email">
+            <span>Email</span><span class="fb-label__hint">optional</span>
+          </label>
+          <input class="fb-input" id="fb-email" name="email" type="email"
+                 maxlength="{{ email_max }}" autocomplete="email">
+          <span class="fb-error" id="err-email"></span>
+        </div>
+      </div>
+
+      <!-- 蜜罐：机器人会顺手填上，服务端看到有值就静默丢弃 -->
+      <div class="fb-honeypot" aria-hidden="true">
+        <label for="fb-website">Website</label>
+        <input id="fb-website" name="website" type="text" tabindex="-1" autocomplete="off">
+      </div>
+
+      <div class="fb-actions">
+        <button type="submit" class="fb-submit" id="fb-submit" disabled>Send</button>
+        <span class="fb-status" id="fb-status" role="status"></span>
+      </div>
+    </form>
+
+    <div class="fb-done" id="fb-done" role="status">
+      <p class="fb-done__title">Thanks — message received.</p>
+      <p class="fb-done__text">I read every one of these.</p>
+      <button type="button" class="fb-done__again" id="fb-again">Send another</button>
+    </div>
+
+    <p class="fb-alt">
+      If you'd prefer email:
+      <a href="mailto:ezhu0908@gmail.com">ezhu0908@gmail.com</a>
+    </p>
+  </section>
+
+</div>
+
+<script src="{{ url_for('static', filename='scripts/bg_local.js') }}"></script>
+<script src="{{ url_for('static', filename='scripts/feedback.js') }}"></script>
+</body>
+</html>

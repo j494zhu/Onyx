@@ -75,6 +75,17 @@ Pushing to `master` auto-deploys: GitHub Actions ([.github/workflows/deploy.yml]
 - **Dark mode hides both layers**, so background image / blur / dimming do nothing there — the settings page greys those controls out (`html.dark-mode .is-dark-disabled`, pure CSS) and says so. The `html.dark-mode` black backdrop lives in tokens.css, next to the rule that removes the layers; they have to stay together or a page loses its background and renders white.
 - **A user-uploaded background never reaches the server.** [static/scripts/bg_local.js](static/scripts/bg_local.js) downsamples it (long edge 2560, WebP) into **IndexedDB** — not localStorage, whose ~5MB string-only quota cannot hold a base64 wallpaper — plus a ~1KB 96px thumbnail in localStorage that the `_ui_head.html` pre-paint script uses as a placeholder while IndexedDB resolves. The DB only stores the marker `bg.src == 'local'`; on a device with no stored image the server-rendered builtin fallback stays, and the marker is **not** overwritten.
 
+### Send Feedback (`/feedback`)
+
+Linked from the bottom of `/settings`. `POST /api/feedback` takes a required `message` (≤2000) and optional `name` (≤80) / `email` (≤120); validation lives in [services/feedback.py](services/feedback.py). The page tells users replies aren't guaranteed and offers the author's email as an alternative.
+
+- **Messages go to a JSONL file, not the database** — one JSON object per line at `app.config['FEEDBACK_FILE']` (default `feedback/feedback.jsonl`, overridable by the `FEEDBACK_FILE` env var). Not being in the DB is the point: a guest's rows are deleted on `/logout`, and feedback from guests (interviewers) must outlive that. The author reads it on the server with `tail feedback/feedback.jsonl`.
+- **The `./feedback` directory is bind-mounted into the `web` container** in docker-compose.yml. Without that mount the file lives inside the container and is wiped on every deploy (each push to master rebuilds it). `feedback/` is in `.gitignore` and `.dockerignore`; `git reset --hard` in the deploy leaves untracked files alone, so the host copy survives.
+- **Records deliberately carry no `user_id`** — only `ts`, `is_guest`, `message`, `name`, `email`. Name and email are advertised as optional; silently logging the account would make that false. A test pins the exact key set.
+- **Writes are one `write()` of a whole line under `fcntl.flock`** because 4 Gunicorn workers may append concurrently. `fcntl` doesn't exist on Windows; locally the lock is skipped.
+- **Anti-spam**: a hidden `website` honeypot field (filled → fake 200, nothing written) and `_check_rate_limit(user_id, scope='feedback', per_minute=2, per_hour=10)`. Rate limiting no-ops without Redis, like everything else Redis-backed.
+- `tests/conftest.py` points `FEEDBACK_FILE` at the temp dir, so the suite never writes into the repo.
+
 ### Real-time sync (SSE)
 
 Production runs 4 gevent Gunicorn workers ([Dockerfile](Dockerfile)), so a user's browser tabs land on different workers — hence the Redis pub/sub fan-out rather than in-process broadcast. Mutations publish to Redis channel `onyx:user:<user_id>` via `publish_user_event()`; every worker holding that user's `GET /api/events` stream forwards the event to the browser. New event types must be added to `EVENT_PAYLOAD_SCHEMA` in routes/common.py or publishing is silently skipped. All Redis-dependent features (SSE, rate limiting) no-op gracefully when `app.redis_client` is `None`.
@@ -83,11 +94,12 @@ Production runs 4 gevent Gunicorn workers ([Dockerfile](Dockerfile)), so a user'
 
 The AI layer (DeepSeek) is gone: the daily **Neural Audit** (`POST /api/ai/audit`), the **taxonomy engine** (`POST /api/visualize`), and the **Weekly Intel** report (`POST /api/insights/weekly`) were all deleted, along with `routes/ai.py`, `services/prompts.py`, the `ai` blueprint, and `DEEPSEEK_API_KEY`. The Data Visualization, Data Matrix, Neural Audit and Pomodoro widgets are gone from the dashboard too. Check `git log` before re-adding anything here.
 
-Three things survive with **no caller** — kept deliberately, do not "clean up" without asking:
+Two things survive with **no caller** — kept deliberately, do not "clean up" without asking:
 
 - **`AlignmentSignal` in [model.py](model.py)** — the RLHF feedback table. Its only writer (`POST /api/alignment`) and reader (the weekly prompt) are both gone, but the production table holds real collected rows and this model is the only handle on them.
-- **`_check_rate_limit()` in [routes/common.py](routes/common.py)** — guarded the deleted audit endpoint; Redis keys still read `rate:audit:*` and `RATE_LIMIT_PER_MINUTE`/`_PER_HOUR` remain in app.py. It is a working, tested Redis rate limiter worth keeping for the next endpoint that needs one.
 - **`GET`/`POST /api/pomodoro` in [routes/data.py](routes/data.py)** plus `User.pomodoro_state` — the widget was removed but the backend was explicitly retained for a future re-add.
+
+`_check_rate_limit()` in routes/common.py originally guarded the deleted audit endpoint and is now used by Send Feedback. Its defaults (`scope='audit'`, limits from `RATE_LIMIT_PER_MINUTE`/`_PER_HOUR` in app.py) preserve that original behaviour; new callers pass their own `scope` and limits, and each scope gets its own `rate:<scope>:<user_id>:*` Redis keys.
 
 ## Gotchas
 

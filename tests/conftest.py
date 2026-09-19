@@ -15,6 +15,8 @@ _tmpdir = tempfile.mkdtemp(prefix='onyx_test_')
 os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(_tmpdir, 'test.db').replace('\\', '/')
 os.environ['SECRET_KEY'] = 'test-secret-key'
 os.environ['REDIS_URL'] = 'redis://127.0.0.1:1/0'
+# Send Feedback 写的 JSONL 也落在临时目录，测试不会往仓库里的 feedback/ 写东西
+os.environ['FEEDBACK_FILE'] = os.path.join(_tmpdir, 'feedback.jsonl')
 
 import pytest
 

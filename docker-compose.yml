@@ -18,6 +18,11 @@ services:
       # the Compose network. The password is embedded in the URL because the app
       # only reads REDIS_URL (REDIS_PASSWORD alone is ignored by the app).
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+    volumes:
+      # Send Feedback appends to /app/feedback/feedback.jsonl. The container is
+      # rebuilt on every deploy, so the file must live on the host or it is wiped.
+      # Read it on the server with: tail feedback/feedback.jsonl
+      - ./feedback:/app/feedback
 
   postgres:
     image: postgres:16-alpine

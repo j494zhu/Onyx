@@ -123,6 +123,15 @@
     {% endfor %}
   </section>
 
+  <!-- ═══ 反馈入口 ═══════════════════════════════════════════ -->
+  <a class="settings-card settings-link" href="{{ url_for('profile.feedback_page') }}">
+    <div>
+      <h2 class="card-title">Send feedback</h2>
+      <p class="card-note">A bug, an idea, or anything else for the author.</p>
+    </div>
+    <span class="settings-link__arrow" aria-hidden="true">→</span>
+  </a>
+
   <div class="settings-foot">
     <button type="button" class="settings-reset" id="reset-btn">Reset to defaults</button>
     <span class="save-status" id="save-status"></span>

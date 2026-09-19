@@ -13,3 +13,6 @@ check_models.py
 test.py
 test2.py
 demo_images
+
+# Send Feedback 的消息（服务器上由 docker-compose 挂进容器，不进仓库）
+feedback/

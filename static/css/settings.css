@@ -297,3 +297,230 @@ html.dark-mode .dark-note { display: block; }
   .field__value { text-align: left; }
   .field__sample { grid-column: 1 / -1; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   Send Feedback 页（templates/feedback.html）
+   和设置页共用卡片、标题和令牌，这里只有表单自己的部分。
+   ══════════════════════════════════════════════════════════════ */
+
+.fb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* display:flex 会压过 hidden 属性自带的 display:none，要显式补回来 */
+.fb-form[hidden] { display: none; }
+
+.fb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fb-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.fb-label__hint {
+  font-size: 0.65rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.04em;
+}
+
+.fb-input,
+.fb-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-content);
+  font-family: var(--font-content);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+.fb-input::placeholder,
+.fb-textarea::placeholder { color: var(--text-ghost); }
+
+.fb-input:hover,
+.fb-textarea:hover { border-color: var(--border-strong); }
+
+.fb-input:focus,
+.fb-textarea:focus {
+  border-color: var(--line-hover);
+  background: var(--surface-elevated);
+}
+
+.fb-textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.fb-field.has-error .fb-input,
+.fb-field.has-error .fb-textarea { border-color: rgba(212, 114, 122, 0.6); }
+
+.fb-error {
+  min-height: 1em;
+  font-size: 0.68rem;
+  color: var(--accent-rose);
+}
+
+.fb-counter {
+  font-family: var(--font-clock);
+  font-variant-numeric: tabular-nums;
+}
+
+.fb-counter.is-near { color: var(--text-secondary); }
+
+/* 名字 / 邮箱并排，窄屏叠起来 */
+.fb-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* 防机器人的蜜罐字段：真人看不到也不会填，机器人会 */
+.fb-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.fb-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+/* 发送按钮：和 dashboard 待机态的 Start Session 同一套半透明白 */
+.fb-submit {
+  padding: 9px 22px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.07) 100%);
+  border: 1px solid rgba(255, 255, 255, calc(0.30 * var(--lum)));
+  color: rgba(255, 255, 255, calc(0.82 * var(--lum)));
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.fb-submit:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, calc(0.55 * var(--lum)));
+  color: rgba(255, 255, 255, calc(0.95 * var(--lum)));
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.14);
+}
+
+.fb-submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fb-status {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.fb-status.is-error { color: var(--accent-rose); }
+
+.fb-alt {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.fb-alt a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-default);
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.fb-alt a:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* 发送成功后替换掉表单 */
+.fb-done {
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 0 6px;
+}
+
+.fb-done.is-visible { display: flex; }
+
+.fb-done__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+}
+
+.fb-done__text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.fb-done__again {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.fb-done__again:hover { color: var(--text-primary); }
+
+@media (max-width: 560px) {
+  .fb-row { grid-template-columns: 1fr; }
+}
+
+/* ─── 设置页底部的 Feedback 入口 ─── */
+.settings-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.settings-link__arrow {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  transition: transform var(--duration-fast), color var(--duration-fast);
+}
+
+.settings-link:hover .settings-link__arrow {
+  color: var(--text-primary);
+  transform: translateX(3px);
+}
+
+.settings-link .card-note { margin-bottom: 0; }

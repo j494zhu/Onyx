@@ -468,17 +468,27 @@ def ui_prefs_style(prefs, bg_url):
 
 # --- Rate-limit helper ---
 
-def _check_rate_limit(user_id):
+def _check_rate_limit(user_id, scope='audit', per_minute=None, per_hour=None):
+    """
+    Redis 计数限流，按 (scope, user_id) 分桶。没有 Redis 时一律放行。
+
+    scope 默认 'audit'、限额默认读 RATE_LIMIT_PER_MINUTE/_PER_HOUR —— 这是它
+    给已删除的 Neural Audit 用时的原始行为，保持不变；新接口传自己的 scope 和限额。
+    """
     redis_client = getattr(current_app, 'redis_client', None)
     if redis_client is None:
         return False, ""
 
-    rate_limit_per_minute = current_app.config.get('RATE_LIMIT_PER_MINUTE', 3)
-    rate_limit_per_hour = current_app.config.get('RATE_LIMIT_PER_HOUR', 20)
+    if per_minute is None:
+        per_minute = current_app.config.get('RATE_LIMIT_PER_MINUTE', 3)
+    if per_hour is None:
+        per_hour = current_app.config.get('RATE_LIMIT_PER_HOUR', 20)
+    rate_limit_per_minute = per_minute
+    rate_limit_per_hour = per_hour
 
     try:
-        minute_key = f"rate:audit:{user_id}:minute"
-        hour_key = f"rate:audit:{user_id}:hour"
+        minute_key = f"rate:{scope}:{user_id}:minute"
+        hour_key = f"rate:{scope}:{user_id}:hour"
 
         with redis_client.pipeline() as pipe:
             pipe.incr(minute_key)
