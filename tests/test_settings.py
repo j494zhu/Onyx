@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app import drop_profile_columns, REMOVED_PROFILE_COLUMNS
 from model import db, User
 from routes.common import (
-    BG_LOCAL, DEFAULT_BG, FONT_ROLES, UI_RANGES,
+    BG_LOCAL, BG_LOCAL_LEGACY_ID, BG_LOCAL_PREFIX, BG_NONE, DEFAULT_BG, FONT_ROLES, UI_RANGES,
     default_ui_prefs, sanitize_ui_prefs, ui_prefs_style,
 )
 
@@ -85,11 +85,38 @@ def test_sanitize_rejects_unknown_fonts_and_images(app):
     assert prefs['bg']['src'] == DEFAULT_BG
 
 
-def test_sanitize_accepts_the_local_marker(app):
-    """自定义图只存在浏览器里，库里记的就是 'local' 这个标记。"""
+def test_sanitize_accepts_a_local_image_id(app):
+    """自定义图只存在浏览器里，库里记的是 'local:<id>'，告诉前端用哪一张。"""
+    with app.test_request_context():
+        prefs = sanitize_ui_prefs({'bg': {'src': 'local:mhx1k2abc123'}})
+    assert prefs['bg']['src'] == 'local:mhx1k2abc123'
+
+
+def test_sanitize_maps_the_legacy_local_marker(app):
+    """旧版只有一张图，存的是裸 'local'；那张图在 IndexedDB 里的 key 是 'custom'。"""
     with app.test_request_context():
         prefs = sanitize_ui_prefs({'bg': {'src': BG_LOCAL}})
-    assert prefs['bg']['src'] == BG_LOCAL
+    assert prefs['bg']['src'] == BG_LOCAL_PREFIX + BG_LOCAL_LEGACY_ID
+
+
+def test_sanitize_rejects_bad_local_ids(app):
+    """id 会被渲染进 data-bg-local 属性，只放行 [a-z0-9]{1,32}。"""
+    with app.test_request_context():
+        for bad in ('local:', 'local:ABC', "local:a'b", 'local:a b', 'local:abc\ndef',
+                    'local:../x', 'local:' + 'a' * 33):
+            assert sanitize_ui_prefs({'bg': {'src': bad}})['bg']['src'] == DEFAULT_BG, bad
+
+
+def test_sanitize_accepts_black(app):
+    with app.test_request_context():
+        assert sanitize_ui_prefs({'bg': {'src': BG_NONE}})['bg']['src'] == BG_NONE
+
+
+def test_black_background_renders_no_image(auth_client):
+    auth_client.post('/api/settings/save', json={'prefs': {'bg': {'src': BG_NONE}}})
+    html = auth_client.get('/').get_data(as_text=True)
+    assert '--bg-image:none' in html
+    assert 'data-bg-local' not in html
 
 
 def test_sanitize_survives_garbage(app):
@@ -103,19 +130,20 @@ def test_style_string_only_contains_whitelisted_values():
     assert '--lum:1;' in style
     assert '--bg-blur:0px;' in style
     assert "--bg-image:url('/static/images/Obsidian/x.jpg')" in style
+    assert '--bg-image:none' in ui_prefs_style(default_ui_prefs(), None)
     assert '--font-clock:' in style
 
 
 def test_save_round_trips_and_clamps(auth_client):
     resp = auth_client.post('/api/settings/save', json={'prefs': {
         'lum': 1.2,
-        'bg': {'src': BG_LOCAL, 'blur': 12, 'dim': 99},
+        'bg': {'src': 'local:abc123', 'blur': 12, 'dim': 99},
         'fonts': {'clock': 'monoui', 'ui': 'georgia'},
     }})
     assert resp.status_code == 200
     prefs = resp.get_json()['prefs']
     assert prefs['lum'] == 1.2
-    assert prefs['bg']['src'] == BG_LOCAL
+    assert prefs['bg']['src'] == 'local:abc123'
     assert prefs['bg']['blur'] == 12.0
     assert prefs['bg']['dim'] == UI_RANGES['dim']['max']   # 越界被夹回
     assert prefs['fonts']['clock'] == 'monoui'
@@ -132,10 +160,10 @@ def test_saved_prefs_reach_the_dashboard_html(auth_client):
 
 
 def test_local_background_marks_the_html_tag(auth_client):
-    auth_client.post('/api/settings/save', json={'prefs': {'bg': {'src': BG_LOCAL}}})
+    auth_client.post('/api/settings/save', json={'prefs': {'bg': {'src': 'local:abc123'}}})
     html = auth_client.get('/').get_data(as_text=True)
-    # 服务端给不出本地图的 URL，只能标记出来 + 填内置回退图，让前端去 IndexedDB 取
-    assert 'data-bg-local="1"' in html
+    # 服务端给不出本地图的 URL，只能标记出 id + 填内置回退图，让前端去 IndexedDB 取
+    assert 'data-bg-local="abc123"' in html
     assert DEFAULT_BG in html
 
 
@@ -164,5 +192,25 @@ def test_context_processor_gives_anonymous_the_defaults(app):
         from app import inject_ui_prefs
         ctx = inject_ui_prefs()
     assert ctx['ui_prefs'] == default_ui_prefs()
-    assert ctx['ui_bg_local'] is False
+    assert ctx['ui_bg_local'] == ''
     assert '--lum:1;' in ctx['ui_style']
+
+
+def test_login_and_register_use_the_dashboard_background_layers(client):
+    """登录/注册页和主页走同一套背景层（tokens.css + <html style>），
+    未登录时先给默认图，再由 _ui_head.html 读本机记下的背景。"""
+    for path in ('/login', '/register'):
+        html = client.get(path).get_data(as_text=True)
+        assert 'css/tokens.css' in html, path
+        assert f'--bg-image:url(&#39;/static/images/Obsidian/{DEFAULT_BG}' in html, path
+        assert "localStorage.getItem('onyx-bg-last')" in html, path
+        assert "localStorage.setItem('onyx-bg-last'" not in html, path
+        assert 'scripts/bg_local.js' in html, path
+
+
+def test_logged_in_pages_record_the_background_for_the_login_page(auth_client):
+    auth_client.post('/api/settings/save', json={'prefs': {'bg': {'src': 'local:abc123', 'blur': 6, 'dim': 1.2}}})
+    html = auth_client.get('/').get_data(as_text=True)
+    assert "localStorage.setItem('onyx-bg-last'" in html
+    assert '"local": "abc123"' in html
+    assert '"blur": 6.0' in html

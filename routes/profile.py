@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 
 from model import db
 from routes.common import (
-    BG_DIR, BG_LOCAL, DEFAULT_BG, FONT_ROLES, FONT_STACKS, UI_RANGES,
+    BG_DIR, BG_LOCAL_PREFIX, BG_NONE, DEFAULT_BG, FONT_ROLES, FONT_STACKS, UI_RANGES,
     _check_rate_limit, builtin_backgrounds, load_ui_prefs, sanitize_ui_prefs,
     ui_prefs_to_text,
 )
@@ -24,7 +24,8 @@ def settings_page():
         prefs=load_ui_prefs(current_user),
         backgrounds=builtin_backgrounds(),
         bg_dir=BG_DIR,
-        bg_local=BG_LOCAL,
+        bg_local_prefix=BG_LOCAL_PREFIX,
+        bg_none=BG_NONE,
         default_bg=DEFAULT_BG,
         font_roles=FONT_ROLES,
         font_stacks=FONT_STACKS,

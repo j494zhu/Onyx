@@ -174,12 +174,29 @@ body {
 
 /* ─── 背景图选择 ───────────────────────────────────────────── */
 
+/* 超过三行就不再长高，改为内部滚动；max-height 由 settings.js 量出来写上。
+   padding + 等量负 margin：给悬停上浮（-2px）和选中描边留出空间，
+   否则会被 overflow 裁掉，同时视觉位置不变。 */
 .bg-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 10px;
-  margin-bottom: 18px;
+  padding: 4px;
+  margin: -4px -4px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, calc(0.12 * var(--lum))) transparent;
 }
+
+.bg-grid::-webkit-scrollbar { width: 5px; }
+.bg-grid::-webkit-scrollbar-track { background: transparent; }
+.bg-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, calc(0.12 * var(--lum)));
+  border-radius: 10px;
+}
+.bg-grid::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, calc(0.28 * var(--lum))); }
 
 .bg-tile {
   position: relative;
@@ -216,23 +233,94 @@ body {
   line-height: 1.4;
 }
 
-.bg-tile--upload.has-image { border-style: solid; color: transparent; }
+.bg-tile--upload.is-full { cursor: not-allowed; opacity: 0.5; }
+.bg-tile--upload.is-full:hover { transform: none; }
 
-.bg-clear {
-  align-self: start;
-  background: none;
-  border: none;
-  color: var(--text-ghost);
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
+/* 自定义图：格子 + 右上角删除按钮。按钮不能嵌在格子（button）里，
+   所以外面包一层 .bg-item，按钮绝对定位叠上去。 */
+.bg-item { position: relative; }
+.bg-item > .bg-tile { display: block; width: 100%; }
+
+.bg-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  transition: color var(--duration-fast);
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, calc(0.9 * var(--lum)));
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
 }
 
-.bg-clear:hover { color: var(--text-secondary); }
-.bg-clear[hidden] { display: none; }
+.bg-del svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* 删除按钮的悬停动画（0.18s）：
+   外圈从左右两点（3 点、9 点钟）开始加粗，向上下两点蔓延合拢；同时中间的叉
+   由白变红。
+
+   加粗的那一圈是第二个 <circle>，pathLength=100，于是一周 = 100。
+   dasharray "L, 50-L" 的周期是 50，正好一周两段；圆的路径起点在 3 点钟，
+   dashoffset = L/2 让每段以 3 点 / 9 点为中心向两边对称展开。
+   L 从 0 → 50 时 offset 从 0 → 25，两者同一条缓动曲线线性同步，所以过程中
+   每一帧都保持对称。 */
+.bg-del__ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, calc(0.35 * var(--lum)));
+  stroke-width: 1;
+}
+
+.bg-del__ring-hot {
+  fill: none;
+  stroke: rgba(255, 255, 255, calc(0.95 * var(--lum)));
+  stroke-width: 2.5;
+  stroke-dasharray: 0 50;
+  stroke-dashoffset: 0;
+  transition: stroke-dasharray 0.18s cubic-bezier(0.2, 0.7, 0.3, 1),
+              stroke-dashoffset 0.18s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.bg-del__x {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition: stroke 0.18s ease-out;
+}
+
+.bg-del:hover .bg-del__ring-hot,
+.bg-del:focus-visible .bg-del__ring-hot {
+  stroke-dasharray: 50 0;
+  stroke-dashoffset: 25;
+}
+
+.bg-del:hover .bg-del__x,
+.bg-del:focus-visible .bg-del__x { stroke: #ff4d4f; }
+
+.bg-del:focus-visible { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-del__ring-hot, .bg-del__x { transition: none; }
+}
+
+/* 只在悬停（或键盘聚焦）时出现，并跟着格子一起上浮 2px */
+.bg-item:hover .bg-del,
+.bg-item:focus-within .bg-del {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bg-item:hover .bg-del { transform: translateY(-2px); }
+.bg-item:hover > .bg-tile { transform: translateY(-2px); border-color: var(--border-strong); }
+
+/* 触屏没有悬停，删除按钮常显 */
+@media (hover: none) {
+  .bg-del { opacity: 1; pointer-events: auto; }
+}
 
 /* 深色模式下背景图整个不渲染，这一区的控件全部置灰失效 —— 纯 CSS，
    不需要 JS 去同步状态。 */

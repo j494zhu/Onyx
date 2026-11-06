@@ -3,8 +3,14 @@
 
    1. 深色模式预涂：类加在 <html> 上，避免第一帧闪白。
    2. 自定义背景图的占位：真图在 IndexedDB 里（异步），而 localStorage 里
-      那张 96px 缩略图是同步可读的 —— 先铺上顶住首屏，等 bg_local.js 读完
-      再换成全图。没有缩略图就保留 <html style> 里的内置回退图。
+      每张图各有一张 96px 缩略图（key 'onyx-bg-thumb:<id>'），是同步可读的
+      —— 先铺上顶住首屏，等 bg_local.js 读完再换成全图。没有缩略图就保留
+      <html style> 里的内置回退图。id 来自服务端渲染的 data-bg-local。
+
+   3. 登录/注册页的背景：未登录时服务端不知道该用哪张，只能给默认图。所以
+      登录状态下每次渲染都把当前背景（图 / 模糊 / 压暗）写进 localStorage
+      'onyx-bg-last'；未登录的页面读它，和主页保持一致。读出来的值全部
+      重新校验 —— 它们会进 style。
 
    亮度系数和字体不需要脚本：它们由服务端直接渲染进 <html style="..."> 。
    ══════════════════════════════════════════════════════════════ #}
@@ -18,8 +24,33 @@
       if (stored === '1' || (stored === null && prefersDark)) root.classList.add('dark-mode');
     } catch (e) {}
     try {
-      if (root.dataset.bgLocal === '1') {
-        var thumb = localStorage.getItem('onyx-bg-thumb');
+      {% if ui_authenticated %}
+      localStorage.setItem('onyx-bg-last', JSON.stringify({{ ui_bg_snapshot | tojson }}));
+      {% else %}
+      var snap = JSON.parse(localStorage.getItem('onyx-bg-last') || 'null');
+      if (snap && typeof snap === 'object') {
+        if (snap.url === null) {
+          root.style.setProperty('--bg-image', 'none');
+        } else if (typeof snap.url === 'string' &&
+                   /^\/static\/images\/Obsidian\/[A-Za-z0-9_.\-]+(\?v=\d+)?$/.test(snap.url)) {
+          root.style.setProperty('--bg-image', "url('" + snap.url + "')");
+        }
+        var blur = parseFloat(snap.blur), dim = parseFloat(snap.dim);
+        // 服务端写入前已经夹过区间；这里只确保是数字，数字进不了 CSS 注入
+        if (isFinite(blur) && blur >= 0) root.style.setProperty('--bg-blur', blur + 'px');
+        if (isFinite(dim) && dim >= 0) root.style.setProperty('--bg-dim', String(dim));
+        if (typeof snap.local === 'string' && /^[a-z0-9]{1,32}$/.test(snap.local)) {
+          root.dataset.bgLocal = snap.local;   // 下面铺缩略图，bg_local.js 再换全图
+        }
+      }
+      {% endif %}
+    } catch (e) {}
+    try {
+      var bgId = root.dataset.bgLocal;
+      if (bgId) {
+        var thumb = localStorage.getItem('onyx-bg-thumb:' + bgId);
+        // 旧版单图的缩略图 key 没带 id；bg_local.js 第一次运行时会把它挪过去
+        if (!thumb && bgId === 'custom') thumb = localStorage.getItem('onyx-bg-thumb');
         if (thumb) root.style.setProperty('--bg-image', "url('" + thumb + "')");
       }
     } catch (e) {}

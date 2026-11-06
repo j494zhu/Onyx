@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="1"{% endif %}>
+<html lang="en" style="{{ ui_style }}"{% if ui_bg_local %} data-bg-local="{{ ui_bg_local }}"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,7 +18,8 @@
 <div class="settings-wrapper"
      id="settings-root"
      data-prefs='{{ prefs | tojson }}'
-     data-local-key="{{ bg_local }}"
+     data-local-prefix="{{ bg_local_prefix }}"
+     data-none-key="{{ bg_none }}"
      data-default-bg="{{ default_bg }}">
 
   <div class="settings-head">
@@ -47,7 +48,7 @@
   <section class="settings-card" id="bg-card">
     <h2 class="card-title">Background</h2>
     <p class="card-note">
-      Custom images are saved only in this device's browser and are never uploaded to a server. 
+      Custom images (up to 100) are saved only in this device's browser and are never uploaded to a server. 
       Switching to another device falls back to the built-in images. 
     </p>
 
@@ -65,14 +66,15 @@
                 aria-label="{{ name }}"></button>
         {% endfor %}
 
+        {# 上传格只负责上传。自定义图由 settings.js 从 IndexedDB 读出来，
+           插在它后面（.bg-item--user，悬停右上角出现删除按钮）。 #}
         <button type="button"
-                class="bg-tile bg-tile--upload{% if prefs.bg.src == bg_local %} is-active{% endif %}"
+                class="bg-tile bg-tile--upload"
                 id="bg-upload-tile"
-                title="Upload your own image (stays on this device)">Upload</button>
+                title="Upload your own images (stay on this device)">Upload</button>
       </div>
 
-      <button type="button" class="bg-clear" id="bg-clear" hidden>Remove uploaded image</button>
-      <input type="file" id="bg-file" accept="image/*" hidden>
+      <input type="file" id="bg-file" accept="image/*" multiple hidden>
 
       <div class="field">
         <label class="field__label" for="bg-blur">Blur</label>

@@ -111,6 +111,12 @@ body {
   background-color: transparent;
 }
 
+/* 背景层下面的底色。bg.src == 'none'（纯黑，--bg-image: none）时露出来的就是它；
+   平时被 ::before 的图整个盖住，图还没加载完时也是黑而不是浏览器的白。 */
+html {
+  background-color: #000;
+}
+
 body::before {
   content: '';
   position: fixed;

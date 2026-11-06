@@ -331,13 +331,31 @@ def now_local():
 # 一串 CSS 自定义属性写进 <html style="...">，所以服务端**必须**把每个值
 # 收进白名单/区间里 —— 否则这里就是一条 CSS 注入路径。
 #
-# 用户自己上传的背景图不经过服务器：它躺在浏览器的 IndexedDB 里，库里只记
-# bg.src == 'local' 这个标记。换一台设备读不到那张图时，自动回落到 DEFAULT_BG。
+# 用户自己上传的背景图不经过服务器：它们躺在浏览器的 IndexedDB 里（最多 100 张，
+# 由前端限制），库里只记 bg.src == 'local:<id>'，告诉前端用哪一张。换一台设备读
+# 不到那张图时，自动回落到 DEFAULT_BG。
+#
+# bg.src == 'none' 是纯黑背景：用户删掉了正在用的那张自定义图时切到这里。
+#
+# 旧版只支持一张自定义图，库里存的是裸 'local'；那张图在 IndexedDB 里的 key
+# 是 'custom'，所以 sanitize 时把 'local' 映射成 'local:custom'，无需数据迁移。
 
 BG_DIR = 'images/Obsidian'
 DEFAULT_BG = '4k-forest-7sfd6znw2ry6hnlt.jpg'
-BG_LOCAL = 'local'
+BG_LOCAL = 'local'                 # 旧标记，只在读入时识别
+BG_LOCAL_PREFIX = 'local:'
+BG_LOCAL_LEGACY_ID = 'custom'
+BG_NONE = 'none'
+_BG_LOCAL_ID_RE = _re.compile(r'[a-z0-9]{1,32}')
 _BG_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
+
+
+def local_bg_id(src):
+    """'local:<id>' → id；其他值（内置图、'none'、非法 id）→ None。"""
+    if not isinstance(src, str) or not src.startswith(BG_LOCAL_PREFIX):
+        return None
+    bg_id = src[len(BG_LOCAL_PREFIX):]
+    return bg_id if _BG_LOCAL_ID_RE.fullmatch(bg_id) else None
 
 # 四档字体各自的可选项。值是完整的 font-family 栈，全部走系统字体，
 # 不引入新的 Google Fonts 请求（Inter 本来就已经在加载）。
@@ -419,7 +437,9 @@ def sanitize_ui_prefs(raw):
     bg = raw.get('bg')
     if isinstance(bg, dict):
         src = str(bg.get('src') or '').strip()
-        if src == BG_LOCAL or src in builtin_backgrounds():
+        if src == BG_LOCAL:
+            src = BG_LOCAL_PREFIX + BG_LOCAL_LEGACY_ID
+        if local_bg_id(src) or src == BG_NONE or src in builtin_backgrounds():
             prefs['bg']['src'] = src
         prefs['bg']['blur'] = round(_clamp_num(bg.get('blur'), UI_RANGES['blur']), 1)
         prefs['bg']['dim'] = round(_clamp_num(bg.get('dim'), UI_RANGES['dim']), 3)
@@ -453,13 +473,15 @@ def ui_prefs_style(prefs, bg_url):
 
     只输出数字和白名单里的字体栈，所以这串东西是安全的；Jinja 的自动转义
     会把字体栈里的单引号转成实体，浏览器解回来再交给 CSS，语义不变。
+
+    bg_url 为 None 表示纯黑背景（bg.src == 'none'）。
     """
     fonts = prefs['fonts']
     parts = [
         f"--lum:{prefs['lum']:g}",
         f"--bg-blur:{prefs['bg']['blur']:g}px",
         f"--bg-dim:{prefs['bg']['dim']:g}",
-        f"--bg-image:url('{bg_url}')",
+        f"--bg-image:url('{bg_url}')" if bg_url else "--bg-image:none",
     ]
     for role in FONT_ROLES:
         parts.append(f"--font-{role}:{FONT_STACKS[fonts[role]]}")

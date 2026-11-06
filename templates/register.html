@@ -1,11 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html style="{{ ui_style }}">
     <head>
         <title>Register</title>
         {% include '_icons.html' %}
+        {# 未登录：_ui_head.html 读本机记下的背景（localStorage 'onyx-bg-last'），和主页一致 #}
+        {% include '_ui_head.html' %}
         <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/shake.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/register_body.css')}}">
+        {# tokens.css 排在最后：覆盖 register_body.css 写在 body 上的背景，改由
+           body::before / ::after 两层来画（和主页同一套） #}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     </head>
     <body>
         
@@ -37,6 +42,7 @@
                 Already have an account? <a href="/login">Login</a>
             </p>
 
-        </div> 
+        </div>
+        <script src="{{ url_for('static', filename='scripts/bg_local.js') }}"></script>
         </body>
 </html>

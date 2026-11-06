@@ -205,7 +205,7 @@ initialize_database()
 # 走服务端而不是 localStorage，是为了跨设备跟随账号，顺带彻底没有首屏闪烁。
 # 未登录的页面（登录/注册）拿到的是默认值，也就是改造前的原始外观。
 
-from routes.common import load_ui_prefs, ui_prefs_style, default_ui_prefs, BG_DIR, BG_LOCAL, DEFAULT_BG
+from routes.common import load_ui_prefs, ui_prefs_style, default_ui_prefs, local_bg_id, BG_DIR, BG_NONE, DEFAULT_BG
 
 
 @app.context_processor
@@ -217,16 +217,32 @@ def inject_ui_prefs():
 
     # 自定义背景图只存在浏览器本地，服务端给不出 URL；这里始终填内置的回退图，
     # 换设备读不到 IndexedDB 时它就是兜底，读得到则由前端脚本覆盖掉。
+    # ui_bg_local 是那张图的 id（渲染成 <html data-bg-local="id">），不是本地图时为 ''。
     src = prefs['bg']['src']
-    is_local = (src == BG_LOCAL)
-    filename = DEFAULT_BG if is_local else src
-    from flask import url_for
-    bg_url = url_for('static', filename=f'{BG_DIR}/{filename}')
+    local_id = local_bg_id(src) or ''
+    if src == BG_NONE:
+        bg_url = None                      # 纯黑
+    else:
+        from flask import url_for
+        filename = DEFAULT_BG if local_id else src
+        bg_url = url_for('static', filename=f'{BG_DIR}/{filename}')
+
+    # 登录/注册页没有登录用户，服务端不知道该画哪张背景。所以登录状态下每次
+    # 渲染都把这份快照交给 _ui_head.html 写进 localStorage，登录/注册页再读出来，
+    # 和主页保持一致（同一台设备上）。
+    bg_snapshot = {
+        'url': bg_url,
+        'local': local_id,
+        'blur': prefs['bg']['blur'],
+        'dim': prefs['bg']['dim'],
+    }
 
     return {
         'ui_prefs': prefs,
         'ui_style': ui_prefs_style(prefs, bg_url),
-        'ui_bg_local': is_local,
+        'ui_bg_local': local_id,
+        'ui_bg_snapshot': bg_snapshot,
+        'ui_authenticated': current_user.is_authenticated,
     }
 
 
