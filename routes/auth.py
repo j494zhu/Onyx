@@ -24,7 +24,7 @@ def register():
         profile = UserProfile(user_id=new_user.id)
         db.session.add(profile)
         db.session.commit()
-        login_user(new_user)
+        login_user(new_user, remember=True)   # 关浏览器后保持登录，时长见 app.py REMEMBER_COOKIE_DURATION
         return redirect('/')
     else:
         return render_template('register.html')
@@ -38,7 +38,7 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and check_password_hash(user.password, password):
-            login_user(user)
+            login_user(user, remember=True)
             return redirect('/')
 
         if user:

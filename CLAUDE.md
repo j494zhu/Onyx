@@ -105,6 +105,7 @@ Two things survive with **no caller** — kept deliberately, do not "clean up" w
 
 ## Gotchas
 
+- **Login persists 14 days via Flask-Login's `remember_token` cookie** (`login_user(..., remember=True)` in routes/auth.py; `REMEMBER_COOKIE_*` in app.py). The Flask `session` cookie itself has no Expires and dies with the browser. Guests are deliberately not remembered. `REMEMBER_COOKIE_SECURE` is on only when `COOKIE_SECURE=1` — turning it on over plain HTTP silently breaks remember-me. Rotating `SECRET_KEY` invalidates every remember cookie.
 - README.md documents features well, but its `app.py:NNN` line references are stale — the code was since split into `routes/`.
 - `SERVER_HANDOFF.md` (in Chinese) documents server deployment pitfalls, especially around `.env` and DB passwords.
 - `issues.txt` (in Chinese) is the running feature backlog, tagged `[resolved]` / `[unresolved]` / `[lesson]` / `[cancelled]` — the best source for what the owner intends to build next and why past decisions were made.

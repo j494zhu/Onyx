@@ -41,6 +41,20 @@ app.config['RATE_LIMIT_PER_HOUR'] = RATE_LIMIT_PER_HOUR
 app.config['FEEDBACK_FILE'] = os.environ.get(
     'FEEDBACK_FILE', os.path.join(app.root_path, 'feedback', 'feedback.jsonl'))
 
+# --- 登录保持（Flask-Login 的 remember cookie）---
+# 不加这个时，登录态只在 Flask 的 session cookie 里，而它没有 Expires，是会话
+# cookie：浏览器一关就被删掉，下次打开要重新登录。
+# login_user(user, remember=True) 会另外签发一个 remember_token cookie（用户 id
+# + 用 SECRET_KEY 算的 HMAC），session 丢了以后 Flask-Login 自动用它恢复登录；
+# 签发、校验、logout 时清除都由 Flask-Login 完成，不需要自己写。
+# 有效期从登录那一刻算起，不随访问续期；换 SECRET_KEY 会让所有 remember cookie 失效。
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=14)
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+# 只在全站 HTTPS 时打开（COOKIE_SECURE=1）：HTTP 站点上带 Secure 的 cookie
+# 浏览器根本不会回传，等于记住登录失效。
+app.config['REMEMBER_COOKIE_SECURE'] = os.environ.get('COOKIE_SECURE') == '1'
+
 # --- Redis setup ---
 redis_client = None
 try:
